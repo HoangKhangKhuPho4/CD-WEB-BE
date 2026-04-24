@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Ignore EI_EXPOSE_REP and EI_EXPOSE_REP2 for DTOs and Configs as they are standard data carriers -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2" />
+        <Class name="~.*\.dto\..*" />
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2" />
+        <Class name="~.*\.config\..*" />
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2" />
+        <Class name="~.*\.entity\..*" />
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2" />
+        <Class name="~.*\.controller\..*" />
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2" />
+        <Class name="~.*\.service\..*" />
+    </Match>
+    <Match>
+        <Bug pattern="CT_CONSTRUCTOR_THROW" />
+        <Class name="~.*\.service\..*" />
+    </Match>
+</FindBugsFilter>
