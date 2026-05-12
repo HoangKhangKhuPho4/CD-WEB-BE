@@ -74,9 +74,23 @@ public class ProductService {
   }
 
   public ProductDto.Response getProductBySku(String sku) {
-    // Note: SKU functionality not implemented in current Product entity
-    // This method needs to be implemented when SKU field is added to Product
-    throw new UnsupportedOperationException("SKU functionality not implemented yet");
+    ProductVariant variant =
+        productVariantRepository
+            .findBySkuCode(sku)
+            .orElseThrow(() -> new ResourceNotFoundException("ProductVariant", "skuCode", sku));
+    if (variant.getIsActive() == null || !variant.getIsActive()) {
+      throw new ResourceNotFoundException("ProductVariant", "skuCode", sku);
+    }
+    Product product =
+        productRepository
+            .findById(variant.getProduct().getId())
+            .orElseThrow(
+                () ->
+                    new ResourceNotFoundException("Product", "id", variant.getProduct().getId()));
+    if (product.getIsActive() == null || !product.getIsActive()) {
+      throw new ResourceNotFoundException("Product", "id", product.getId());
+    }
+    return mapToResponse(product);
   }
 
   public ProductDto.Response createProduct(ProductDto.CreateRequest createRequest) {
@@ -266,14 +280,15 @@ public class ProductService {
   }
 
   public Page<ProductDto.Response> getProductsByBrand(String brand, Pageable pageable) {
-    // Converting brand string to producer ID for now
-    // This is a temporary solution until proper brand management is implemented
+    final int producerId;
     try {
-      Integer.parseInt(brand);
-      return productRepository.findActiveProductsPage(pageable).map(this::mapToResponse);
+      producerId = Integer.parseInt(brand);
     } catch (NumberFormatException e) {
-      return productRepository.findActiveProductsPage(pageable).map(this::mapToResponse);
+      throw new BadRequestException("producerId must be a valid integer");
     }
+    return productRepository
+        .findByProducerIdAndIsActive(producerId, true, pageable)
+        .map(this::mapToResponse);
   }
 
   public List<String> getAllBrands() {

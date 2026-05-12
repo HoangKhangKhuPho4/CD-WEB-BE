@@ -34,6 +34,8 @@ public interface ProductRepository
 
   List<Product> findByProducerIdAndIsActive(Integer producerId, Boolean isActive);
 
+  Page<Product> findByProducerIdAndIsActive(Integer producerId, Boolean isActive, Pageable pageable);
+
   @Query(
       "SELECT p FROM Product p WHERE p.isActive = true AND "
           + "(LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
