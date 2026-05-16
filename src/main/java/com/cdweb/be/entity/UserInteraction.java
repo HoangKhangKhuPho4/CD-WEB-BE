@@ -20,7 +20,7 @@ public class UserInteraction {
   private Long id;
 
   @Column(name = "user_id", nullable = false)
-  private Integer userId;
+  private Long userId;
 
   @Column(name = "product_id", nullable = false)
   private Integer productId;

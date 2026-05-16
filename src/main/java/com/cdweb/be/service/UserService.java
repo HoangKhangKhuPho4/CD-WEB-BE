@@ -8,8 +8,8 @@ import com.cdweb.be.exception.ResourceNotFoundException;
 import com.cdweb.be.repository.RoleRepository;
 import com.cdweb.be.repository.UserRepository;
 import java.util.Collections;
+import lombok.RequiredArgsConstructor; // Sử dụng để hết cảnh báo Field Injection
 import org.modelmapper.ModelMapper;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,22 +18,19 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class UserService {
 
-  @Autowired private UserRepository userRepository;
-
-  @Autowired private RoleRepository roleRepository;
-
-  @Autowired private ModelMapper modelMapper;
-
-  @Autowired private PasswordEncoder passwordEncoder;
-
-  @Autowired private AuditLogService auditLogService;
+  private final UserRepository userRepository;
+  private final RoleRepository roleRepository;
+  private final ModelMapper modelMapper;
+  private final PasswordEncoder passwordEncoder;
+  private final AuditLogService auditLogService;
 
   public Page<UserDto.Response> getAllUsers(Pageable pageable) {
     return userRepository
-        .findAllActive(pageable)
-        .map(user -> modelMapper.map(user, UserDto.Response.class));
+            .findAllActive(pageable)
+            .map(user -> modelMapper.map(user, UserDto.Response.class));
   }
 
   public Page<UserDto.Response> getAllUsersForAdmin(String keyword, Pageable pageable) {
@@ -46,19 +43,20 @@ public class UserService {
     return usersPage.map(user -> modelMapper.map(user, UserDto.Response.class));
   }
 
-  public UserDto.Response getUserById(Integer id) {
+  // Đã sửa: Integer -> Long
+  public UserDto.Response getUserById(Long id) {
     User user =
-        userRepository
-            .findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+            userRepository
+                    .findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
     return modelMapper.map(user, UserDto.Response.class);
   }
 
   public UserDto.Response getUserByUsername(String username) {
     User user =
-        userRepository
-            .findByUsername(username)
-            .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+            userRepository
+                    .findByUsername(username)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
     return modelMapper.map(user, UserDto.Response.class);
   }
 
@@ -74,37 +72,39 @@ public class UserService {
     user.setUsername(request.getUsername());
     user.setEmail(request.getEmail());
     user.setPassword(passwordEncoder.encode(request.getPassword()));
-    user.setName(request.getName());
+    // Đã sửa: setName -> setFullName
+    user.setFullName(request.getName());
     user.setPhone(request.getPhone());
     user.setBirth(request.getBirth());
     user.setGender(request.getGender());
-    user.setStatus(1); // Active by default
+    user.setEnabled(true);
 
-    Integer roleId =
-        request.getRoleId() != null ? request.getRoleId() : 4; // Default to CUSTOMER/USER
+    Long roleId =
+            request.getRoleId() != null ? request.getRoleId() : 4;
     Role userRole =
-        roleRepository
-            .findById(roleId)
-            .orElseThrow(() -> new BadRequestException("Role not found"));
+            roleRepository
+                    .findById(roleId)
+                    .orElseThrow(() -> new BadRequestException("Role not found"));
     user.setRoles(Collections.singleton(userRole));
 
     User savedUser = userRepository.save(user);
     auditLogService.log(
-        "CREATE_USER",
-        "User",
-        savedUser.getId().toString(),
-        "Created user: " + savedUser.getUsername());
+            "CREATE_USER",
+            "User",
+            savedUser.getId().toString(),
+            "Created user: " + savedUser.getUsername());
     return modelMapper.map(savedUser, UserDto.Response.class);
   }
 
-  public UserDto.Response updateUser(Integer id, UserDto.UpdateRequest updateRequest) {
+  public UserDto.Response updateUser(Long id, UserDto.UpdateRequest updateRequest) {
     User user =
-        userRepository
-            .findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+            userRepository
+                    .findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
 
     if (updateRequest.getName() != null) {
-      user.setName(updateRequest.getName());
+      // Đã sửa: setName -> setFullName
+      user.setFullName(updateRequest.getName());
     }
     if (updateRequest.getPhone() != null) {
       user.setPhone(updateRequest.getPhone());
@@ -121,58 +121,59 @@ public class UserService {
     return modelMapper.map(updatedUser, UserDto.Response.class);
   }
 
-  public void deleteUser(Integer id) {
+  // Đã sửa: Integer -> Long, setStatus -> setEnabled
+  public void deleteUser(Long id) {
     User user =
-        userRepository
-            .findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
-    // Soft delete: set status to 0
-    user.setStatus(0);
+            userRepository
+                    .findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+    user.setEnabled(false);
     userRepository.save(user);
     auditLogService.log("DELETE_USER", "User", id.toString(), "Soft deleted user");
   }
 
-  public void activateUser(Integer id) {
+  public void activateUser(Long id) {
     User user =
-        userRepository
-            .findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
-    user.setStatus(1);
+            userRepository
+                    .findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+    user.setEnabled(true);
     userRepository.save(user);
   }
 
-  public void deactivateUser(Integer id) {
+  public void deactivateUser(Long id) {
     User user =
-        userRepository
-            .findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
-    user.setStatus(0);
+            userRepository
+                    .findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+    user.setEnabled(false);
     userRepository.save(user);
   }
 
-  public UserDto.Response toggleStatus(Integer id) {
+  public UserDto.Response toggleStatus(Long id) {
     User user =
-        userRepository
-            .findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
-    user.setStatus(user.getStatus() == 1 ? 0 : 1);
+            userRepository
+                    .findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+    // Đã sửa: logic đảo ngược Boolean
+    user.setEnabled(!user.getEnabled());
     User updatedUser = userRepository.save(user);
     auditLogService.log(
-        "TOGGLE_STATUS", "User", id.toString(), "New status: " + updatedUser.getStatus());
+            "TOGGLE_STATUS", "User", id.toString(), "New status: " + updatedUser.getEnabled());
     return modelMapper.map(updatedUser, UserDto.Response.class);
   }
 
   public Page<UserDto.Response> searchUsers(String keyword, Pageable pageable) {
     return userRepository
-        .searchUsers(keyword, pageable)
-        .map(user -> modelMapper.map(user, UserDto.Response.class));
+            .searchUsers(keyword, pageable)
+            .map(user -> modelMapper.map(user, UserDto.Response.class));
   }
 
   public void changePassword(String username, UserDto.ChangePasswordRequest request) {
     User user =
-        userRepository
-            .findByUsername(username)
-            .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+            userRepository
+                    .findByUsername(username)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
 
     if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
       throw new BadRequestException("Current password is incorrect");

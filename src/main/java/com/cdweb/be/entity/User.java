@@ -4,46 +4,46 @@ import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Set;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
-import lombok.ToString;
+import lombok.*;
 
 @Entity
 @Table(name = "users")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class User {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
-  private Integer id;
+  private Long id;
 
-  @Column(name = "username", nullable = false, unique = true)
-  private String username;
-
-  @Column(name = "email", nullable = false, unique = true)
+  @Column(unique = true, nullable = false)
   private String email;
 
-  @Column(name = "password", nullable = false)
+  @Column(unique = true)
+  private String username;
+
   private String password;
 
-  @Column(name = "name", nullable = false)
-  private String name;
+  @Column(name = "full_name", nullable = false)
+  private String fullName;
 
-  @Column(name = "phone")
   private String phone;
 
-  @Column(name = "birth")
   private LocalDate birth;
 
-  @Column(name = "gender")
   private String gender;
 
-  @Column(name = "oauth_provider", length = 50)
-  private String oauthProvider;
+  @Column(name = "avatar_url")
+  private String avatarUrl;
+
+  // ==========================================
+  // OAUTH2 & SOCIAL LOGIN
+  // ==========================================
+  @Column(name = "provider")
+  private String provider;
 
   @Column(name = "oauth_uid", columnDefinition = "TEXT")
   private String oauthUid;
@@ -51,7 +51,26 @@ public class User {
   @Column(name = "oauth_token", columnDefinition = "TEXT")
   private String oauthToken;
 
-  @Column(name = "created_at")
+  // ==========================================
+  // STATUS & ROLES (Dùng cho Spring Security)
+  // ==========================================
+  @Builder.Default
+  @Column(name = "enabled")
+  private Boolean enabled = true;
+
+  @EqualsAndHashCode.Exclude
+  @ToString.Exclude
+  @ManyToMany(fetch = FetchType.EAGER)
+  @JoinTable(
+          name = "user_roles",
+          joinColumns = @JoinColumn(name = "user_id"),
+          inverseJoinColumns = @JoinColumn(name = "role_id"))
+  private Set<Role> roles;
+
+  // ==========================================
+  // AUDIT (TRACKING THỜI GIAN)
+  // ==========================================
+  @Column(name = "created_at", updatable = false)
   private LocalDateTime createdAt;
 
   @Column(name = "updated_at")
@@ -60,46 +79,23 @@ public class User {
   @Column(name = "last_login_at")
   private LocalDateTime lastLoginAt;
 
-  @Column(name = "status")
-  private Integer status = 1; // 1 = active, 0 = inactive
-
-  @EqualsAndHashCode.Exclude // Ngăn hashCode() kích hoạt load vòng lặp vô hạn
-  @ToString.Exclude // Ngăn toString() kích hoạt load collection
-  @ManyToMany(fetch = FetchType.EAGER)
-  @JoinTable(
-      name = "user_roles",
-      joinColumns = @JoinColumn(name = "user_id"),
-      inverseJoinColumns = @JoinColumn(name = "role_id"))
-  private Set<Role> roles;
-
-  // Custom methods for compatibility
-  public void setFullName(String fullName) {
-    this.name = fullName;
-  }
-
-  public String getFullName() {
-    return this.name;
-  }
-
-  public void setIsActive(boolean isActive) {
-    this.status = isActive ? 1 : 0;
-  }
-
-  public boolean getIsActive() {
-    return this.status != null && this.status == 1;
-  }
-
+  // ==========================================
+  // LIFECYCLE HOOKS
+  // ==========================================
   @PrePersist
   protected void onCreate() {
-    createdAt = LocalDateTime.now();
-    updatedAt = LocalDateTime.now();
-    if (status == null) {
-      status = 1;
+    this.createdAt = LocalDateTime.now();
+    this.updatedAt = LocalDateTime.now();
+    if (this.enabled == null) {
+      this.enabled = true;
+    }
+    if (this.provider == null) {
+      this.provider = "LOCAL";
     }
   }
 
   @PreUpdate
   protected void onUpdate() {
-    updatedAt = LocalDateTime.now();
+    this.updatedAt = LocalDateTime.now();
   }
 }

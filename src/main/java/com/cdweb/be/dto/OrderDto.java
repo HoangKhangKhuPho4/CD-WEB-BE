@@ -17,7 +17,7 @@ public class OrderDto {
   public static class CheckoutRequest {
 
     // Dùng địa chỉ đã lưu — hoặc nhập thẳng bên dưới
-    private Integer addressId;
+    private Long addressId;
 
     // Thông tin giao hàng inline (bắt buộc nếu không dùng addressId)
     private String shippingName;
@@ -219,7 +219,7 @@ public class OrderDto {
     private String orderCode;
 
     // Thông tin khách hàng
-    private Integer userId;
+    private Long userId;
     private String username;
     private String customerName;
     private String customerEmail;
@@ -288,7 +288,7 @@ public class OrderDto {
     private LocalDateTime orderDate;
 
     // Thông tin khách hàng
-    private Integer userId;
+    private Long userId;
     private String username;
     private String customerName;
 

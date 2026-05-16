@@ -20,9 +20,6 @@ public class AddressController {
 
   @Autowired private AddressService addressService;
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // GET /api/addresses  → Lấy danh sách tất cả địa chỉ của user
-  // ─────────────────────────────────────────────────────────────────────────
   @GetMapping
   @PreAuthorize("isAuthenticated()")
   public ResponseEntity<ApiResponse<List<AddressDto.Response>>> getMyAddresses() {
@@ -31,55 +28,45 @@ public class AddressController {
     return ResponseEntity.ok(ApiResponse.success("Addresses retrieved successfully", addresses));
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // POST /api/addresses  → Thêm địa chỉ mới
-  // ─────────────────────────────────────────────────────────────────────────
   @PostMapping
   @PreAuthorize("isAuthenticated()")
   public ResponseEntity<ApiResponse<AddressDto.Response>> createAddress(
-      @Valid @RequestBody AddressDto.Request request) {
+          @Valid @RequestBody AddressDto.Request request) {
     String username = getCurrentUsername();
     AddressDto.Response response = addressService.createAddress(username, request);
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(ApiResponse.success("Address created successfully", response));
+            .body(ApiResponse.success("Address created successfully", response));
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // PUT /api/addresses/{id}  → Cập nhật địa chỉ
-  // ─────────────────────────────────────────────────────────────────────────
   @PutMapping("/{id}")
   @PreAuthorize("isAuthenticated()")
+  // Sửa Integer id -> Long id
   public ResponseEntity<ApiResponse<AddressDto.Response>> updateAddress(
-      @PathVariable Integer id, @Valid @RequestBody AddressDto.Request request) {
+          @PathVariable Long id, @Valid @RequestBody AddressDto.Request request) {
     String username = getCurrentUsername();
     AddressDto.Response response = addressService.updateAddress(username, id, request);
     return ResponseEntity.ok(ApiResponse.success("Address updated successfully", response));
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // DELETE /api/addresses/{id}  → Xóa địa chỉ
-  // ─────────────────────────────────────────────────────────────────────────
   @DeleteMapping("/{id}")
   @PreAuthorize("isAuthenticated()")
-  public ResponseEntity<ApiResponse<Void>> deleteAddress(@PathVariable Integer id) {
+  // Sửa Integer id -> Long id
+  public ResponseEntity<ApiResponse<Void>> deleteAddress(@PathVariable Long id) {
     String username = getCurrentUsername();
     addressService.deleteAddress(username, id);
     return ResponseEntity.ok(ApiResponse.success("Address deleted successfully", null));
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // PUT /api/addresses/{id}/default  → Đặt địa chỉ làm mặc định nhanh
-  // ─────────────────────────────────────────────────────────────────────────
   @PutMapping("/{id}/default")
   @PreAuthorize("isAuthenticated()")
+  // Sửa Integer id -> Long id
   public ResponseEntity<ApiResponse<AddressDto.Response>> setDefaultAddress(
-      @PathVariable Integer id) {
+          @PathVariable Long id) {
     String username = getCurrentUsername();
     AddressDto.Response response = addressService.setDefaultAddress(username, id);
     return ResponseEntity.ok(ApiResponse.success("Address set as default successfully", response));
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   private String getCurrentUsername() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
     return authentication.getName();

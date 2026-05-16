@@ -308,25 +308,25 @@ public class InventoryServiceImpl implements InventoryService {
   @Override
   public List<InventoryResponseDto> getInventoryTransactions() {
     return inventoryRepository.findAllByOrderByCreatedAtDesc().stream()
-        .map(
-            i ->
-                InventoryResponseDto.builder()
-                    .id(i.getId())
-                    .transactionType(i.getTransactionType().name())
-                    .quantity(i.getQuantity())
-                    .referenceType(i.getReferenceType())
-                    .referenceId(i.getReferenceId())
-                    .reason(i.getReason())
-                    .createdAt(i.getCreatedAt())
-                    .variantId(i.getVariant().getId())
-                    .variantName(i.getVariant().getVariantName())
-                    .skuCode(i.getVariant().getSkuCode())
-                    .productItemId(i.getProductItem() != null ? i.getProductItem().getId() : null)
-                    .imei(i.getProductItem() != null ? i.getProductItem().getImei() : null)
-                    .userId(i.getUser().getId())
-                    .userName(i.getUser().getName())
-                    .build())
-        .collect(Collectors.toList());
+            .map(
+                    i ->
+                            InventoryResponseDto.builder()
+                                    .id(i.getId())
+                                    .transactionType(i.getTransactionType().name())
+                                    .quantity(i.getQuantity())
+                                    .referenceType(i.getReferenceType())
+                                    .referenceId(i.getReferenceId())
+                                    .reason(i.getReason())
+                                    .createdAt(i.getCreatedAt())
+                                    .variantId(i.getVariant().getId())
+                                    .variantName(i.getVariant().getVariantName())
+                                    .skuCode(i.getVariant().getSkuCode())
+                                    .productItemId(i.getProductItem() != null ? i.getProductItem().getId() : null)
+                                    .imei(i.getProductItem() != null ? i.getProductItem().getImei() : null)
+                                    .userId(i.getUser().getId()) // Đảm bảo DTO nhận Long
+                                    .userName(i.getUser().getFullName()) // ĐÃ SỬA: .getName() -> .getFullName()
+                                    .build())
+            .collect(Collectors.toList());
   }
 
   private User getCurrentUser() {

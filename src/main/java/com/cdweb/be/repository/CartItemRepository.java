@@ -13,17 +13,17 @@ import org.springframework.stereotype.Repository;
 public interface CartItemRepository extends JpaRepository<CartItem, Integer> {
 
   @Query("SELECT ci FROM CartItem ci WHERE ci.cart.user.id = :userId")
-  List<CartItem> findByUserId(@Param("userId") Integer userId);
+  List<CartItem> findByUserId(@Param("userId") Long userId);
 
   @Query(
       "SELECT ci FROM CartItem ci WHERE ci.cart.user.id = :userId AND ci.variant.id = :variantId")
   Optional<CartItem> findByUserIdAndVariantId(
-      @Param("userId") Integer userId, @Param("variantId") Integer variantId);
+      @Param("userId") Long userId, @Param("variantId") Integer variantId);
 
   @Modifying
   @Query("DELETE FROM CartItem ci WHERE ci.cart.user.id = :userId")
-  void deleteAllByUserId(@Param("userId") Integer userId);
+  void deleteAllByUserId(@Param("userId") Long userId);
 
   @Query("SELECT COUNT(ci) FROM CartItem ci WHERE ci.cart.user.id = :userId")
-  Long countByUserId(@Param("userId") Integer userId);
+  Long countByUserId(@Param("userId") Long userId);
 }

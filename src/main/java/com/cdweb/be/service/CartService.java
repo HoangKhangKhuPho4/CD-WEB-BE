@@ -13,22 +13,20 @@ import com.cdweb.be.repository.ProductVariantRepository;
 import com.cdweb.be.repository.UserRepository;
 import java.util.ArrayList;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor; // Thêm lombok
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
+@RequiredArgsConstructor // Sử dụng Constructor Injection (hết báo vàng Field Injection)
 public class CartService {
 
-  @Autowired private CartRepository cartRepository;
-
-  @Autowired private CartItemRepository cartItemRepository;
-
-  @Autowired private ProductVariantRepository productVariantRepository;
-
-  @Autowired private UserRepository userRepository;
+  private final CartRepository cartRepository;
+  private final CartItemRepository cartItemRepository;
+  private final ProductVariantRepository productVariantRepository;
+  private final UserRepository userRepository;
 
   @Value("${app.server.url:http://localhost:8080}")
   private String serverUrl;
@@ -46,17 +44,17 @@ public class CartService {
     Cart cart = getOrCreateCart(user);
 
     ProductVariant variant =
-        productVariantRepository
-            .findById(request.getVariantId())
-            .orElseThrow(
-                () ->
-                    new ResourceNotFoundException("ProductVariant", "id", request.getVariantId()));
+            productVariantRepository
+                    .findById(request.getVariantId())
+                    .orElseThrow(
+                            () ->
+                                    new ResourceNotFoundException("ProductVariant", "id", request.getVariantId()));
 
     if (!Boolean.TRUE.equals(variant.getIsActive())) {
-      throw new BadRequestException("Product variant is no longer available");
+      throw new BadRequestException("Sản phẩm không còn kinh doanh");
     }
 
-    // Check if variant already in cart → increment quantity
+    // Đã khớp Long cho user.getId()
     var existingItem = cartItemRepository.findByUserIdAndVariantId(user.getId(), variant.getId());
 
     if (existingItem.isPresent()) {
@@ -76,15 +74,15 @@ public class CartService {
       cartItemRepository.save(item);
     }
 
-    // Reload cart to get updated items
     Cart updatedCart = cartRepository.findById(cart.getId()).orElse(cart);
     return mapToCartResponse(updatedCart);
   }
 
   // ─── UPDATE ITEM ─────────────────────────────────────────────────────────────
   public CartDto.CartResponse updateItem(
-      String username, Integer cartItemId, CartDto.UpdateItemRequest request) {
+          String username, Integer cartItemId, CartDto.UpdateItemRequest request) {
     User user = findUser(username);
+    // Hàm này đã được sửa tham số userId thành Long
     CartItem item = getCartItemWithOwnerCheck(cartItemId, user.getId());
 
     validateStock(item.getVariant(), request.getQuantity());
@@ -101,7 +99,6 @@ public class CartService {
     User user = findUser(username);
     CartItem item = getCartItemWithOwnerCheck(cartItemId, user.getId());
 
-    // Xóa item khỏi collection của cart trước (tránh Hibernate cache cũ)
     Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
     cart.getCartItems().remove(item);
     cartItemRepository.delete(item);
@@ -113,32 +110,35 @@ public class CartService {
   // ─── CLEAR CART ──────────────────────────────────────────────────────────────
   public void clearCart(String username) {
     User user = findUser(username);
+    // Repository cần nhận Long userId
     cartItemRepository.deleteAllByUserId(user.getId());
   }
 
   // ─── HELPERS ─────────────────────────────────────────────────────────────────
   private User findUser(String username) {
     return userRepository
-        .findByUsername(username)
-        .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+            .findByUsername(username)
+            .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
   }
 
   private Cart getOrCreateCart(User user) {
+    // Repository cần nhận Long userId
     return cartRepository
-        .findByUserId(user.getId())
-        .orElseGet(
-            () -> {
-              Cart cart = new Cart();
-              cart.setUser(user);
-              return cartRepository.save(cart);
-            });
+            .findByUserId(user.getId())
+            .orElseGet(
+                    () -> {
+                      Cart cart = new Cart();
+                      cart.setUser(user);
+                      return cartRepository.save(cart);
+                    });
   }
 
-  private CartItem getCartItemWithOwnerCheck(Integer cartItemId, Integer userId) {
+  // ĐÃ SỬA: Integer userId -> Long userId
+  private CartItem getCartItemWithOwnerCheck(Integer cartItemId, Long userId) {
     CartItem item =
-        cartItemRepository
-            .findById(cartItemId)
-            .orElseThrow(() -> new ResourceNotFoundException("CartItem", "id", cartItemId));
+            cartItemRepository
+                    .findById(cartItemId)
+                    .orElseThrow(() -> new ResourceNotFoundException("CartItem", "id", cartItemId));
     if (!item.getCart().getUser().getId().equals(userId)) {
       throw new ResourceNotFoundException("CartItem", "id", cartItemId);
     }
@@ -148,13 +148,14 @@ public class CartService {
   private void validateStock(ProductVariant variant, int requestedQty) {
     if (variant.getStockQuantity() != null && requestedQty > variant.getStockQuantity()) {
       throw new BadRequestException(
-          "Insufficient stock. Available: "
-              + variant.getStockQuantity()
-              + ", requested: "
-              + requestedQty);
+              "Không đủ hàng trong kho. Còn lại: "
+                      + variant.getStockQuantity()
+                      + ", yêu cầu: "
+                      + requestedQty);
     }
   }
 
+  // Các hàm mapToResponse giữ nguyên...
   private CartDto.CartResponse mapToCartResponse(Cart cart) {
     List<CartItem> items = cart.getCartItems();
     List<CartDto.CartItemResponse> itemResponses = new ArrayList<>();
@@ -205,11 +206,10 @@ public class CartService {
     vd.setVariantName(variant.getVariantName());
     vd.setPrice(variant.getPrice() != null ? variant.getPrice().doubleValue() : null);
     vd.setOriginalPrice(
-        variant.getOriginalPrice() != null ? variant.getOriginalPrice().doubleValue() : null);
+            variant.getOriginalPrice() != null ? variant.getOriginalPrice().doubleValue() : null);
     vd.setStockQuantity(variant.getStockQuantity());
     vd.setIsDefault(variant.getIsDefault());
 
-    // Product info
     if (variant.getProduct() != null) {
       CartDto.CartProductDto pd = new CartDto.CartProductDto();
       pd.setId(variant.getProduct().getId());
@@ -217,13 +217,12 @@ public class CartService {
       vd.setProduct(pd);
     }
 
-    // First image from variant or product
     String imageUrl = null;
     if (variant.getImages() != null && !variant.getImages().isEmpty()) {
       imageUrl = serverUrl + "/img/" + variant.getImages().get(0).getId();
     } else if (variant.getProduct() != null
-        && variant.getProduct().getImages() != null
-        && !variant.getProduct().getImages().isEmpty()) {
+            && variant.getProduct().getImages() != null
+            && !variant.getProduct().getImages().isEmpty()) {
       imageUrl = serverUrl + "/img/" + variant.getProduct().getImages().get(0).getId();
     }
     vd.setImageUrl(imageUrl);

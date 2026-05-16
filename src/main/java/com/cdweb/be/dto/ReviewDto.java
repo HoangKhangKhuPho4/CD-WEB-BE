@@ -125,7 +125,7 @@ public class ReviewDto {
   @NoArgsConstructor
   @AllArgsConstructor
   public static class ReviewUserDto {
-    private Integer id;
+    private Long id;
     private String username;
     private String name;
   }

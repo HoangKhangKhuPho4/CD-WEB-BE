@@ -46,7 +46,7 @@ public class AddressDto {
   @NoArgsConstructor
   @AllArgsConstructor
   public static class Response {
-    private Integer id;
+    private Long id;
     private String receiverName;
     private String phone;
     private String province;

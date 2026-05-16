@@ -8,9 +8,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface UserInteractionRepository extends JpaRepository<UserInteraction, Long> {
   Optional<UserInteraction> findByUserIdAndProductIdAndActionType(
-      Integer userId, Integer productId, String actionType);
+      Long userId, Integer productId, String actionType);
 
-  // 📊 1. Thống kê Views và Purchases theo từng Sản phẩm
+  //  1. Thống kê Views và Purchases theo từng Sản phẩm
   @org.springframework.data.jpa.repository.Query(
       "SELECT u.productId, p.name, "
           + "SUM(CASE WHEN u.actionType = 'VIEW' THEN 1 ELSE 0 END) as views, "
@@ -19,7 +19,7 @@ public interface UserInteractionRepository extends JpaRepository<UserInteraction
           + "GROUP BY u.productId, p.name")
   java.util.List<Object[]> countViewsAndPurchasesByProduct();
 
-  // 📊 2. Phân vùng Sở thích: Đếm lượng action theo Danh mục (ProductType)
+  //  2. Phân vùng Sở thích: Đếm lượng action theo Danh mục (ProductType)
   @org.springframework.data.jpa.repository.Query(
       "SELECT p.productType.id, p.productType.name, "
           + "COUNT(u) as interactions "

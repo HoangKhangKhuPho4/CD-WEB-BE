@@ -29,6 +29,6 @@ public class InventoryResponseDto {
   private String imei;
 
   // User who made the transaction
-  private Integer userId;
+  private Long userId;
   private String userName;
 }

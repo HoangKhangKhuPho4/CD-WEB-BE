@@ -7,6 +7,7 @@ import com.cdweb.be.exception.BadRequestException;
 import com.cdweb.be.exception.ResourceNotFoundException;
 import com.cdweb.be.repository.AddressRepository;
 import com.cdweb.be.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,13 +16,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class AddressService {
 
   private static final int MAX_ADDRESSES_PER_USER = 10;
 
-  @Autowired private AddressRepository addressRepository;
+  private final AddressRepository addressRepository;
 
-  @Autowired private UserRepository userRepository;
+  private final UserRepository userRepository;
 
   // ─────────────────────────────────────────────────────────────────────────
   // GET all addresses of the current user
@@ -30,8 +32,8 @@ public class AddressService {
   public List<AddressDto.Response> getAddressesByUsername(String username) {
     User user = findUser(username);
     return addressRepository.findByUserIdOrderByIsDefaultDescCreatedAtDesc(user.getId()).stream()
-        .map(this::toResponse)
-        .collect(Collectors.toList());
+            .map(this::toResponse)
+            .collect(Collectors.toList());
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -43,7 +45,7 @@ public class AddressService {
     long count = addressRepository.countByUserId(user.getId());
     if (count >= MAX_ADDRESSES_PER_USER) {
       throw new BadRequestException(
-          "You can only save up to " + MAX_ADDRESSES_PER_USER + " addresses");
+              "You can only save up to " + MAX_ADDRESSES_PER_USER + " addresses");
     }
 
     UserAddress address = new UserAddress();
@@ -71,13 +73,14 @@ public class AddressService {
   // ─────────────────────────────────────────────────────────────────────────
   // UPDATE an existing address
   // ─────────────────────────────────────────────────────────────────────────
+  // ĐÃ SỬA: Integer addressId -> Long addressId
   public AddressDto.Response updateAddress(
-      String username, Integer addressId, AddressDto.Request request) {
+          String username, Long addressId, AddressDto.Request request) {
     User user = findUser(username);
     UserAddress address =
-        addressRepository
-            .findByIdAndUserId(addressId, user.getId())
-            .orElseThrow(() -> new ResourceNotFoundException("Address", "id", addressId));
+            addressRepository
+                    .findByIdAndUserId(addressId, user.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Address", "id", addressId));
 
     mapRequestToEntity(request, address);
 
@@ -93,12 +96,13 @@ public class AddressService {
   // ─────────────────────────────────────────────────────────────────────────
   // DELETE an address
   // ─────────────────────────────────────────────────────────────────────────
-  public void deleteAddress(String username, Integer addressId) {
+  // ĐÃ SỬA: Integer addressId -> Long addressId
+  public void deleteAddress(String username, Long addressId) {
     User user = findUser(username);
     UserAddress address =
-        addressRepository
-            .findByIdAndUserId(addressId, user.getId())
-            .orElseThrow(() -> new ResourceNotFoundException("Address", "id", addressId));
+            addressRepository
+                    .findByIdAndUserId(addressId, user.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Address", "id", addressId));
 
     boolean wasDefault = Boolean.TRUE.equals(address.getIsDefault());
     addressRepository.delete(address);
@@ -106,7 +110,7 @@ public class AddressService {
     // If deleted address was default, promote the latest remaining address to default
     if (wasDefault) {
       List<UserAddress> remaining =
-          addressRepository.findByUserIdOrderByIsDefaultDescCreatedAtDesc(user.getId());
+              addressRepository.findByUserIdOrderByIsDefaultDescCreatedAtDesc(user.getId());
       if (!remaining.isEmpty()) {
         UserAddress newDefault = remaining.get(0);
         newDefault.setIsDefault(true);
@@ -118,12 +122,13 @@ public class AddressService {
   // ─────────────────────────────────────────────────────────────────────────
   // SET DEFAULT address
   // ─────────────────────────────────────────────────────────────────────────
-  public AddressDto.Response setDefaultAddress(String username, Integer addressId) {
+  // ĐÃ SỬA: Integer addressId -> Long addressId
+  public AddressDto.Response setDefaultAddress(String username, Long addressId) {
     User user = findUser(username);
     UserAddress address =
-        addressRepository
-            .findByIdAndUserId(addressId, user.getId())
-            .orElseThrow(() -> new ResourceNotFoundException("Address", "id", addressId));
+            addressRepository
+                    .findByIdAndUserId(addressId, user.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Address", "id", addressId));
 
     address.setIsDefault(true);
     UserAddress saved = addressRepository.save(address);
@@ -138,8 +143,8 @@ public class AddressService {
   // ─────────────────────────────────────────────────────────────────────────
   private User findUser(String username) {
     return userRepository
-        .findByUsername(username)
-        .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+            .findByUsername(username)
+            .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
   }
 
   private void mapRequestToEntity(AddressDto.Request request, UserAddress address) {
@@ -155,7 +160,7 @@ public class AddressService {
 
   private AddressDto.Response toResponse(UserAddress a) {
     AddressDto.Response r = new AddressDto.Response();
-    r.setId(a.getId());
+    r.setId(a.getId()); // Đảm bảo DTO của bạn cũng dùng Long cho id nhé
     r.setReceiverName(a.getReceiverName());
     r.setPhone(a.getPhone());
     r.setProvince(a.getProvince());

@@ -14,7 +14,7 @@ public class UserAddress {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
-  private Integer id;
+  private Long id;
 
   @Column(name = "receiver_name", nullable = false)
   private String receiverName;

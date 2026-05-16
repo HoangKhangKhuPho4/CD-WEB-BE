@@ -8,7 +8,7 @@ import com.cdweb.be.repository.*;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor; // Thêm để dùng Constructor Injection
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -16,24 +16,18 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
+@RequiredArgsConstructor // Xóa các @Autowired và dùng cái này để hết báo vàng
 public class ReviewService {
 
-  @Autowired private ReviewRepository reviewRepository;
+  private final ReviewRepository reviewRepository;
+  private final ProductRepository productRepository;
+  private final UserRepository userRepository;
+  private final ProductVariantRepository productVariantRepository;
+  private final OrderRepository orderRepository;
 
-  @Autowired private ProductRepository productRepository;
-
-  @Autowired private UserRepository userRepository;
-
-  @Autowired private ProductVariantRepository productVariantRepository;
-
-  @Autowired private OrderRepository orderRepository;
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // GET REVIEWS — lấy danh sách đánh giá theo product_id
-  // ═══════════════════════════════════════════════════════════════════════════
   @Transactional(readOnly = true)
   public Page<ReviewDto.Response> getProductReviews(
-      Integer productId, Integer rating, Pageable pageable) {
+          Integer productId, Integer rating, Pageable pageable) {
     if (!productRepository.existsById(productId)) {
       throw new ResourceNotFoundException("Product", "id", productId);
     }
@@ -48,9 +42,6 @@ public class ReviewService {
     return reviews.map(this::mapToResponse);
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // GET REVIEW SUMMARY — thống kê đánh giá sản phẩm
-  // ═══════════════════════════════════════════════════════════════════════════
   @Transactional(readOnly = true)
   public ReviewDto.ReviewSummary getReviewSummary(Integer productId) {
     if (!productRepository.existsById(productId)) {
@@ -61,7 +52,6 @@ public class ReviewService {
     Integer totalReviews = reviewRepository.countApprovedByProductId(productId);
     List<Object[]> ratingCounts = reviewRepository.countByProductIdGroupByRating(productId);
 
-    // Xây dựng phân bố 1→5 sao
     Map<Integer, Integer> distribution = new LinkedHashMap<>();
     for (int i = 5; i >= 1; i--) {
       distribution.put(i, 0);
@@ -80,28 +70,22 @@ public class ReviewService {
     return summary;
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // GET MY REVIEWS — xem đánh giá của chính mình
-  // ═══════════════════════════════════════════════════════════════════════════
   @Transactional(readOnly = true)
   public Page<ReviewDto.Response> getMyReviews(String username, Pageable pageable) {
     User user = findUser(username);
+    // Repository giờ đã nhận Long userId
     return reviewRepository.findByUserId(user.getId(), pageable).map(this::mapToResponse);
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // CREATE REVIEW — tạo đánh giá mới
-  // ═══════════════════════════════════════════════════════════════════════════
   public ReviewDto.Response createReview(ReviewDto.CreateRequest request, String username) {
     User user = findUser(username);
 
     Product product =
-        productRepository
-            .findById(request.getProductId())
-            .orElseThrow(
-                () -> new ResourceNotFoundException("Product", "id", request.getProductId()));
+            productRepository
+                    .findById(request.getProductId())
+                    .orElseThrow(
+                            () -> new ResourceNotFoundException("Product", "id", request.getProductId()));
 
-    // Kiểm tra đã đánh giá chưa
     if (reviewRepository.existsByProductIdAndUserId(request.getProductId(), user.getId())) {
       throw new BadRequestException("Bạn đã đánh giá sản phẩm này rồi");
     }
@@ -114,52 +98,48 @@ public class ReviewService {
     review.setContent(request.getContent());
     review.setPros(request.getPros());
     review.setCons(request.getCons());
-    review.setIsApproved(true); // auto-approve
+    review.setIsApproved(true);
 
-    // Variant (tùy chọn)
     if (request.getVariantId() != null) {
       ProductVariant variant =
-          productVariantRepository.findById(request.getVariantId()).orElse(null);
+              productVariantRepository.findById(request.getVariantId()).orElse(null);
       review.setVariant(variant);
     }
 
-    // Order (tùy chọn) + kiểm tra verified purchase
     if (request.getOrderId() != null) {
       Order order = orderRepository.findById(request.getOrderId()).orElse(null);
       if (order != null
-          && order.getUser().getId().equals(user.getId())
-          && (order.getStatus() == Order.OrderStatus.DELIVERED
+              && order.getUser().getId().equals(user.getId())
+              && (order.getStatus() == Order.OrderStatus.DELIVERED
               || order.getStatus() == Order.OrderStatus.COMPLETED)) {
         review.setOrder(order);
         review.setIsVerifiedPurchase(true);
       }
     } else {
-      // Tự động kiểm tra lịch sử mua hàng nếu FE không truyền orderId
       List<Order> orders =
-          orderRepository.findUserOrdersByProduct(
-              user.getId(),
-              product.getId(),
-              Arrays.asList(Order.OrderStatus.DELIVERED, Order.OrderStatus.COMPLETED),
-              org.springframework.data.domain.PageRequest.of(0, 1));
+              orderRepository.findUserOrdersByProduct(
+                      user.getId(),
+                      product.getId(),
+                      Arrays.asList(Order.OrderStatus.DELIVERED, Order.OrderStatus.COMPLETED),
+                      org.springframework.data.domain.PageRequest.of(0, 1));
       if (!orders.isEmpty()) {
         review.setOrder(orders.get(0));
         review.setIsVerifiedPurchase(true);
       }
     }
 
-    // Hình ảnh đính kèm (Bổ sung mới 🆕)
     if (request.getImages() != null && !request.getImages().isEmpty()) {
       List<ReviewImage> reviewImages =
-          request.getImages().stream()
-              .filter(url -> url != null && !url.trim().isEmpty())
-              .map(
-                  url -> {
-                    ReviewImage img = new ReviewImage();
-                    img.setImageUrl(url);
-                    img.setReview(review);
-                    return img;
-                  })
-              .collect(Collectors.toList());
+              request.getImages().stream()
+                      .filter(url -> url != null && !url.trim().isEmpty())
+                      .map(
+                              url -> {
+                                ReviewImage img = new ReviewImage();
+                                img.setImageUrl(url);
+                                img.setReview(review);
+                                return img;
+                              })
+                      .collect(Collectors.toList());
       review.setReviewImages(reviewImages);
     }
 
@@ -167,17 +147,14 @@ public class ReviewService {
     return mapToResponse(saved);
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // UPDATE REVIEW — cập nhật đánh giá của mình
-  // ═══════════════════════════════════════════════════════════════════════════
   public ReviewDto.Response updateReview(
-      Integer reviewId, ReviewDto.UpdateRequest request, String username) {
+          Integer reviewId, ReviewDto.UpdateRequest request, String username) {
     User user = findUser(username);
 
     Review review =
-        reviewRepository
-            .findByIdAndUserId(reviewId, user.getId())
-            .orElseThrow(() -> new ResourceNotFoundException("Review", "id", reviewId));
+            reviewRepository
+                    .findByIdAndUserId(reviewId, user.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Review", "id", reviewId));
 
     review.setRating(request.getRating());
     review.setTitle(request.getTitle());
@@ -185,7 +162,6 @@ public class ReviewService {
     review.setPros(request.getPros());
     review.setCons(request.getCons());
 
-    // Cập nhật hình ảnh (Bổ sung mới 🆕)
     if (request.getImages() != null) {
       if (review.getReviewImages() == null) {
         review.setReviewImages(new ArrayList<>());
@@ -193,16 +169,16 @@ public class ReviewService {
         review.getReviewImages().clear();
       }
       List<ReviewImage> newImages =
-          request.getImages().stream()
-              .filter(url -> url != null && !url.trim().isEmpty())
-              .map(
-                  url -> {
-                    ReviewImage img = new ReviewImage();
-                    img.setImageUrl(url);
-                    img.setReview(review);
-                    return img;
-                  })
-              .collect(Collectors.toList());
+              request.getImages().stream()
+                      .filter(url -> url != null && !url.trim().isEmpty())
+                      .map(
+                              url -> {
+                                ReviewImage img = new ReviewImage();
+                                img.setImageUrl(url);
+                                img.setReview(review);
+                                return img;
+                              })
+                      .collect(Collectors.toList());
       review.getReviewImages().addAll(newImages);
     }
 
@@ -210,63 +186,48 @@ public class ReviewService {
     return mapToResponse(saved);
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // DELETE REVIEW — xóa đánh giá của mình
-  // ═══════════════════════════════════════════════════════════════════════════
   public void deleteReview(Integer reviewId, String username) {
     User user = findUser(username);
-
     Review review =
-        reviewRepository
-            .findByIdAndUserId(reviewId, user.getId())
-            .orElseThrow(() -> new ResourceNotFoundException("Review", "id", reviewId));
-
+            reviewRepository
+                    .findByIdAndUserId(reviewId, user.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Review", "id", reviewId));
     reviewRepository.delete(review);
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // HELPFUL — tăng lượt hữu ích
-  // ═══════════════════════════════════════════════════════════════════════════
   public ReviewDto.Response markHelpful(Integer reviewId) {
     Review review =
-        reviewRepository
-            .findById(reviewId)
-            .orElseThrow(() -> new ResourceNotFoundException("Review", "id", reviewId));
+            reviewRepository
+                    .findById(reviewId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Review", "id", reviewId));
 
     review.setHelpfulCount(review.getHelpfulCount() + 1);
     Review saved = reviewRepository.save(review);
     return mapToResponse(saved);
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ADMIN — Quản lý đánh giá
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  /** Admin lấy toàn bộ đánh giá (phân trang) */
   @Transactional(readOnly = true)
   public Page<ReviewDto.Response> adminGetAllReviews(Pageable pageable) {
     return reviewRepository.findAll(pageable).map(this::mapToResponse);
   }
 
-  /** Admin duyệt hoặc ẩn đánh giá */
   public ReviewDto.Response adminUpdateStatus(
-      Integer reviewId, ReviewDto.AdminUpdateStatusRequest request) {
+          Integer reviewId, ReviewDto.AdminUpdateStatusRequest request) {
     Review review =
-        reviewRepository
-            .findById(reviewId)
-            .orElseThrow(() -> new ResourceNotFoundException("Review", "id", reviewId));
+            reviewRepository
+                    .findById(reviewId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Review", "id", reviewId));
 
     review.setIsApproved(request.getIsApproved());
     Review saved = reviewRepository.save(review);
     return mapToResponse(saved);
   }
 
-  /** Admin/Shop phản hồi đánh giá */
   public ReviewDto.Response adminReply(Integer reviewId, ReviewDto.AdminReplyRequest request) {
     Review review =
-        reviewRepository
-            .findById(reviewId)
-            .orElseThrow(() -> new ResourceNotFoundException("Review", "id", reviewId));
+            reviewRepository
+                    .findById(reviewId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Review", "id", reviewId));
 
     review.setReplyContent(request.getReplyContent());
     review.setRepliedAt(LocalDateTime.now());
@@ -274,7 +235,6 @@ public class ReviewService {
     return mapToResponse(saved);
   }
 
-  /** Admin xóa vĩnh viễn đánh giá */
   public void adminDeleteReview(Integer reviewId) {
     if (!reviewRepository.existsById(reviewId)) {
       throw new ResourceNotFoundException("Review", "id", reviewId);
@@ -282,14 +242,10 @@ public class ReviewService {
     reviewRepository.deleteById(reviewId);
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // HELPERS
-  // ═══════════════════════════════════════════════════════════════════════════
-
   private User findUser(String username) {
     return userRepository
-        .findByUsername(username)
-        .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+            .findByUsername(username)
+            .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
   }
 
   private ReviewDto.Response mapToResponse(Review review) {
@@ -308,28 +264,25 @@ public class ReviewService {
     response.setReplyContent(review.getReplyContent());
     response.setRepliedAt(review.getRepliedAt());
 
-    // Product info
     if (review.getProduct() != null) {
       response.setProductId(review.getProduct().getId());
       response.setProductName(review.getProduct().getName());
     }
 
-    // Variant info
     if (review.getVariant() != null) {
       response.setVariantId(review.getVariant().getId());
       response.setVariantName(review.getVariant().getVariantName());
     }
 
-    // User info
     if (review.getUser() != null) {
       ReviewDto.ReviewUserDto userDto = new ReviewDto.ReviewUserDto();
       userDto.setId(review.getUser().getId());
       userDto.setUsername(review.getUser().getUsername());
-      userDto.setName(review.getUser().getName());
+      // Đã sửa: getName() -> getFullName()
+      userDto.setName(review.getUser().getFullName());
       response.setUser(userDto);
     }
 
-    // Images
     List<ReviewImage> imgs = review.getReviewImages();
     if (imgs != null && !imgs.isEmpty()) {
       response.setImages(imgs.stream().map(ReviewImage::getImageUrl).collect(Collectors.toList()));

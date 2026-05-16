@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Set;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -29,71 +30,48 @@ public class UserDto {
     @Size(min = 6, message = "Password must be at least 6 characters")
     private String password;
 
-    @NotBlank(message = "Name is required")
-    private String name;
+    @NotBlank(message = "Full name is required")
+    private String fullName; // Đã đổi từ name -> fullName
 
     private String phone;
     private LocalDate birth;
     private String gender;
     private String address;
-    private Integer roleId = 4; // Default USER role
+    private Long roleId = 4L; // Đã đổi sang Long
 
-    public void setFullName(String fullName) {
-      this.name = fullName;
-    }
-
-    public String getFullName() {
-      return this.name;
-    }
-
-    public void setBirthAt(LocalDate birthAt) {
-      this.birth = birthAt;
-    }
-
-    public LocalDate getBirthAt() {
-      return this.birth;
-    }
+    // Các helper để giữ tương thích với code cũ (nếu cần)
+    public String getName() { return this.fullName; }
+    public void setName(String name) { this.fullName = name; }
   }
 
   @Data
   @NoArgsConstructor
   @AllArgsConstructor
   public static class UpdateRequest {
-    private String name;
+    private String fullName; // Đã đổi từ name -> fullName
     private String phone;
     private LocalDate birth;
     private String gender;
     private String address;
 
-    public void setFullName(String fullName) {
-      this.name = fullName;
-    }
-
-    public String getFullName() {
-      return this.name;
-    }
-
-    public void setBirthAt(LocalDate birthAt) {
-      this.birth = birthAt;
-    }
-
-    public LocalDate getBirthAt() {
-      return this.birth;
-    }
+    public String getName() { return this.fullName; }
+    public void setName(String name) { this.fullName = name; }
   }
 
   @Data
   @NoArgsConstructor
   @AllArgsConstructor
+  @Builder
   public static class Response {
-    private Integer id;
+    private Long id;
     private String username;
     private String email;
-    private String name;
+    private String fullName; // Đã đổi từ name -> fullName
     private String phone;
     private LocalDate birth;
     private String gender;
     private String address;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;
 
@@ -102,15 +80,18 @@ public class UserDto {
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime lastLoginAt;
-    private Integer status;
+
+    private Boolean enabled; // ĐỔI TỪ Integer status SANG Boolean enabled
+
     private Set<RoleDto> roles;
 
-    public void setIsActive(boolean isActive) {
-      this.status = isActive ? 1 : 0;
+    // Helper cho logic cũ
+    public Integer getStatus() {
+      return Boolean.TRUE.equals(enabled) ? 1 : 0;
     }
 
-    public String getFullName() {
-      return this.name;
+    public String getName() {
+      return this.fullName;
     }
   }
 
@@ -118,7 +99,7 @@ public class UserDto {
   @NoArgsConstructor
   @AllArgsConstructor
   public static class RoleDto {
-    private Integer id;
+    private Long id; // Đổi Integer -> Long
     private String name;
   }
 

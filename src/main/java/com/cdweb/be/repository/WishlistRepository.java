@@ -10,16 +10,16 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface WishlistRepository extends JpaRepository<Wishlist, Integer> {
 
-  Page<Wishlist> findByUserId(Integer userId, Pageable pageable);
+  Page<Wishlist> findByUserId(Long userId, Pageable pageable);
 
   Optional<Wishlist> findByUserIdAndProductIdAndVariantId(
-      Integer userId, Integer productId, Integer variantId);
+      Long userId, Integer productId, Integer variantId);
 
-  Optional<Wishlist> findByUserIdAndProductIdAndVariantIsNull(Integer userId, Integer productId);
+  Optional<Wishlist> findByUserIdAndProductIdAndVariantIsNull(Long userId, Integer productId);
 
-  Optional<Wishlist> findByUserIdAndProductId(Integer userId, Integer productId);
+  Optional<Wishlist> findByUserIdAndProductId(Long userId, Integer productId);
 
-  boolean existsByUserIdAndProductId(Integer userId, Integer productId);
+  boolean existsByUserIdAndProductId(Long userId, Integer productId);
 
-  void deleteByUserId(Integer userId);
+  void deleteByUserId(Long userId);
 }

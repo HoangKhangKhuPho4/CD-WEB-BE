@@ -10,19 +10,21 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface AddressRepository extends JpaRepository<UserAddress, Integer> {
+// Sửa Integer thành Long ở đây
+public interface AddressRepository extends JpaRepository<UserAddress, Long> {
 
-  List<UserAddress> findByUserIdOrderByIsDefaultDescCreatedAtDesc(Integer userId);
+  List<UserAddress> findByUserIdOrderByIsDefaultDescCreatedAtDesc(Long userId);
 
-  Optional<UserAddress> findByIdAndUserId(Integer id, Integer userId);
+  // Sửa Integer thành Long
+  Optional<UserAddress> findByIdAndUserId(Long id, Long userId);
 
-  boolean existsByIdAndUserId(Integer id, Integer userId);
+  // Sửa Integer thành Long
+  boolean existsByIdAndUserId(Long id, Long userId);
 
   @Modifying
-  @Query(
-      "UPDATE UserAddress a SET a.isDefault = false WHERE a.user.id = :userId AND a.id <> :excludeId")
-  void unsetDefaultForUser(@Param("userId") Integer userId, @Param("excludeId") Integer excludeId);
+  @Query("UPDATE UserAddress a SET a.isDefault = false WHERE a.user.id = :userId AND a.id <> :excludeId")
+  void unsetDefaultForUser(@Param("userId") Long userId, @Param("excludeId") Long excludeId); // Sửa Integer thành Long
 
   @Query("SELECT COUNT(a) FROM UserAddress a WHERE a.user.id = :userId")
-  long countByUserId(@Param("userId") Integer userId);
+  long countByUserId(@Param("userId") Long userId); // Sửa Integer thành Long
 }

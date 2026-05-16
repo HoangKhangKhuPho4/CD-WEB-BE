@@ -10,7 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface UserRepository extends JpaRepository<User, Integer> {
+public interface UserRepository extends JpaRepository<User, Long> {
 
   Optional<User> findByUsername(String username);
 
@@ -22,16 +22,19 @@ public interface UserRepository extends JpaRepository<User, Integer> {
 
   boolean existsByEmail(String email);
 
-  @Query("SELECT u FROM User u WHERE u.status = 1")
+  // Đã sửa: u.status = 1 -> u.enabled = true
+  @Query("SELECT u FROM User u WHERE u.enabled = true")
   Page<User> findAllActive(Pageable pageable);
 
-  @Query("SELECT u FROM User u WHERE u.status = :status")
-  Page<User> findByStatus(@Param("status") Integer status, Pageable pageable);
+  // Đã sửa: status -> enabled, đổi tham số từ Integer sang Boolean
+  @Query("SELECT u FROM User u WHERE u.enabled = :enabled")
+  Page<User> findByStatus(@Param("enabled") Boolean enabled, Pageable pageable);
 
+  // Đã sửa: u.name -> u.fullName
   @Query(
-      "SELECT u FROM User u WHERE "
-          + "(LOWER(u.username) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
-          + "LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
-          + "LOWER(u.name) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+          "SELECT u FROM User u WHERE "
+                  + "(LOWER(u.username) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
+                  + "LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
+                  + "LOWER(u.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')))")
   Page<User> searchUsers(@Param("keyword") String keyword, Pageable pageable);
 }

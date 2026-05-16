@@ -13,7 +13,7 @@ public class UserInteractionDto {
   @NoArgsConstructor
   @AllArgsConstructor
   public static class Request {
-    private Integer userId;
+    private Long userId;
     private Integer productId;
     private String actionType; // e.g. "VIEW", "ADD_TO_CART", "PURCHASE", "RATED"
     private BigDecimal rating;
@@ -25,7 +25,7 @@ public class UserInteractionDto {
   @AllArgsConstructor
   public static class Response {
     private Long id;
-    private Integer userId;
+    private Long userId;
     private Integer productId;
     private String actionType;
     private BigDecimal rating;

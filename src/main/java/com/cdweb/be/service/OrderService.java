@@ -986,7 +986,7 @@ public class OrderService {
     User user = order.getUser();
     r.setUserId(user.getId());
     r.setUsername(user.getUsername());
-    r.setCustomerName(user.getName());
+    r.setCustomerName(user.getFullName());
     r.setCustomerEmail(user.getEmail());
     r.setCustomerPhone(user.getPhone());
 
@@ -1068,7 +1068,7 @@ public class OrderService {
     User user = order.getUser();
     s.setUserId(user.getId());
     s.setUsername(user.getUsername());
-    s.setCustomerName(user.getName());
+    s.setCustomerName(user.getFullName());
 
     List<OrderDetail> details = order.getOrderDetails();
     if (details != null && !details.isEmpty()) {

@@ -4,6 +4,7 @@ import com.cdweb.be.dto.ApiResponse;
 import com.cdweb.be.dto.UserDto;
 import com.cdweb.be.entity.QrAuthToken;
 import com.cdweb.be.entity.User;
+import com.cdweb.be.exception.BadRequestException;
 import com.cdweb.be.repository.QrAuthTokenRepository;
 import com.cdweb.be.repository.UserRepository;
 import com.cdweb.be.util.JwtTokenProvider;
@@ -11,89 +12,88 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor; // Dùng cho Constructor Injection
 import org.modelmapper.ModelMapper;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/auth/qr")
 @CrossOrigin(origins = "*")
+@RequiredArgsConstructor // Tự động inject các final field
 public class QrAuthController {
 
-  @Autowired private QrAuthTokenRepository qrRepo;
+  private final QrAuthTokenRepository qrRepo;
+  private final UserRepository userRepository;
+  private final JwtTokenProvider jwtTokenProvider;
+  private final ModelMapper modelMapper;
 
-  @Autowired private UserRepository userRepository;
-
-  @Autowired private JwtTokenProvider jwtTokenProvider;
-
-  @Autowired private ModelMapper modelMapper;
-
-  // ----- [API 1] Màn hình Máy tính xin cấp quyền in Mã QR Trắng ------
+  // ----- [API 1] Máy tính xin cấp mã QR ------
   @GetMapping("/generate")
   public ResponseEntity<ApiResponse<Map<String, String>>> generateQRToken() {
     QrAuthToken qrcode = new QrAuthToken();
-    qrRepo.save(qrcode); // Database tự sinh ra UUID và trạng thái PENDING
+    qrcode.setToken(java.util.UUID.randomUUID().toString());
+    qrcode.setStatus("PENDING");
+    qrcode.setExpiryDate(LocalDateTime.now().plusMinutes(2)); // Hết hạn sau 2 phút
+
+    qrRepo.save(qrcode);
 
     Map<String, String> response = new HashMap<>();
     response.put("qrToken", qrcode.getToken());
     response.put("expiresAt", qrcode.getExpiryDate().toString());
 
-    return ResponseEntity.ok(ApiResponse.success("Success", response));
+    return ResponseEntity.ok(ApiResponse.success("Mã QR đã được tạo", response));
   }
 
-  // ----- [API 2] Điện thoại Quét & Bấm "Tôi muốn Đăng nhập vô PC này" ------
+  // ----- [API 2] Điện thoại xác nhận đăng nhập ------
   @PostMapping("/verify")
-  @PreAuthorize("isAuthenticated()") // Chỉ user đã login trên điện thoại mới được xác thực QR
-  public ResponseEntity<ApiResponse<String>> verifyQRToken(
-      @RequestParam("token") String token, @RequestParam("userId") Integer userId) {
+  @PreAuthorize("isAuthenticated()")
+  public ResponseEntity<ApiResponse<String>> verifyQRToken(@RequestParam("token") String token) {
+    // 🛡️ BẢO MẬT: Lấy username từ Token của Điện thoại đang quét
+    String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+
+    User user = userRepository.findByUsernameOrEmail(currentUsername, currentUsername)
+            .orElseThrow(() -> new BadRequestException("Người dùng không tồn tại"));
+
     Optional<QrAuthToken> qrOpt = qrRepo.findByTokenAndExpiryDateAfter(token, LocalDateTime.now());
 
     if (qrOpt.isEmpty()) {
-      return ResponseEntity.badRequest()
-          .body(ApiResponse.error("Mã QR này không tồn tại hoặc đã hết hạn (Quá 2 phút)!"));
+      throw new BadRequestException("Mã QR này không tồn tại hoặc đã hết hạn!");
     }
 
     QrAuthToken qrCode = qrOpt.get();
     if ("VERIFIED".equals(qrCode.getStatus())) {
-      return ResponseEntity.badRequest()
-          .body(ApiResponse.error("Mã QR này đã bị quét bởi ai đó rồi!"));
+      throw new BadRequestException("Mã QR này đã được sử dụng!");
     }
 
-    User user = userRepository.findById(userId).orElse(null);
-    if (user == null) {
-      return ResponseEntity.badRequest().body(ApiResponse.error("Người dùng không tồn tại"));
-    }
-
+    // Gán user (kiểu Long) vào QR token
     qrCode.setUser(user);
-    qrCode.setStatus("VERIFIED"); // Mở khóa
+    qrCode.setStatus("VERIFIED");
     qrRepo.save(qrCode);
 
-    return ResponseEntity.ok(ApiResponse.success("Xác thực vào Máy Tính thành công!", null));
+    return ResponseEntity.ok(ApiResponse.success("Xác thực thành công! Máy tính của bạn sẽ tự động đăng nhập.", null));
   }
 
-  // ----- [API 3] Máy tính liên tục Polling hỏi trạng thái ------
+  // ----- [API 3] Máy tính Polling hỏi trạng thái ------
   @GetMapping("/status/{token}")
-  public ResponseEntity<?> checkQRStatus(@PathVariable("token") String token) {
-    Optional<QrAuthToken> qrOpt = qrRepo.findByToken(token);
+  public ResponseEntity<ApiResponse<Map<String, Object>>> checkQRStatus(@PathVariable("token") String token) {
+    QrAuthToken qrCode = qrRepo.findByToken(token)
+            .orElseThrow(() -> new BadRequestException("Mã QR không hợp lệ!"));
 
-    if (qrOpt.isEmpty()) {
-      return ResponseEntity.badRequest().body(ApiResponse.error("Token QR không hợp lệ!"));
-    }
-
-    QrAuthToken qrCode = qrOpt.get();
     Map<String, Object> response = new HashMap<>();
+    response.put("status", qrCode.getStatus());
 
-    response.put("status", qrCode.getStatus()); // 'PENDING' hoặc 'VERIFIED'
-
-    // Cú Magic: Nếu trạng thái đã mở cửa -> Giao thẳng vé JWT cho PC
+    // Nếu điện thoại đã VERIFIED -> Cấp Access Token cho Máy tính
     if ("VERIFIED".equals(qrCode.getStatus()) && qrCode.getUser() != null) {
       String jwt = jwtTokenProvider.generateTokenFromUsername(qrCode.getUser().getUsername());
+
+      // Map sang DTO (Lúc này UserDto.Response đã có fullName và Long id)
       UserDto.Response userResponse = modelMapper.map(qrCode.getUser(), UserDto.Response.class);
 
       response.put("accessToken", jwt);
-      response.put("user", userResponse); // Thêm user cho Frontend ReactJS dùng luôn
+      response.put("user", userResponse);
     }
 
     return ResponseEntity.ok(ApiResponse.success("Lấy trạng thái thành công", response));
