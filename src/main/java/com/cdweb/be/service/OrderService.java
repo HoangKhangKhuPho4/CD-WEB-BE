@@ -47,7 +47,7 @@ public class OrderService {
 
   @Autowired @Lazy private PaymentService paymentService;
 
-  @Autowired private GHNService ghnService;
+  @Autowired private GhnService ghnService;
 
   @Autowired private OrderItemRepository orderItemRepository;
 

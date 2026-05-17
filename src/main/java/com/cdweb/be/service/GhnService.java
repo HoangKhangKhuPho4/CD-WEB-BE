@@ -44,9 +44,9 @@ import org.springframework.web.util.UriComponentsBuilder;
  * hình trong {@link GHNConfig#getFallbackShippingFee()}
  */
 @Service
-public class GHNService {
+public class GhnService {
 
-  private static final Logger log = LoggerFactory.getLogger(GHNService.class);
+  private static final Logger log = LoggerFactory.getLogger(GhnService.class);
 
   private static final String PROVINCE_API = "/shiip/public-api/master-data/province";
   private static final String DISTRICT_API = "/shiip/public-api/master-data/district";

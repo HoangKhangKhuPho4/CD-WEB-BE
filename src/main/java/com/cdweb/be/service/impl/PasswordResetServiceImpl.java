@@ -59,7 +59,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
     // Send email
     String resetLink = frontendUrl + "?token=" + token;
-    emailService.sendResetPasswordEmail(user.getEmail(), resetLink);
+    emailService.sendPasswordResetEmail(user.getEmail(), user.getFullName(), resetLink);
   }
 
   @Override

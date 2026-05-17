@@ -4,7 +4,7 @@ import com.cdweb.be.dto.ApiResponse;
 import com.cdweb.be.dto.GHNDto;
 import com.cdweb.be.entity.Order;
 import com.cdweb.be.repository.OrderRepository;
-import com.cdweb.be.service.GHNService;
+import com.cdweb.be.service.GhnService;
 import com.cdweb.be.service.OrderService;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.LocalDateTime;
@@ -41,7 +41,7 @@ public class GHNWebhookController {
 
   @Autowired private OrderService orderService;
 
-  @Autowired private GHNService ghnService;
+  @Autowired private GhnService ghnService;
 
   /**
    * POST /api/shipping/ghn/webhook GHN gọi endpoint này mỗi khi trạng thái vận đơn thay đổi.

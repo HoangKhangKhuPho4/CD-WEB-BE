@@ -165,4 +165,20 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
           @Param("productId") Integer productId,
           @Param("statuses") List<Order.OrderStatus> statuses,
           Pageable pageable);
+
+  // 1. Tìm kiếm theo keyword và status
+  @Query("SELECT o FROM Order o WHERE (:keyword IS NULL OR o.orderCode LIKE %:keyword%) AND (:status IS NULL OR o.status = :status)")
+  Page<Order> searchOrders(@Param("keyword") String keyword, @Param("status") Order.OrderStatus status, Pageable pageable);
+
+  // 2. Lọc theo status
+  @Query("SELECT o FROM Order o WHERE :status IS NULL OR o.status = :status")
+  Page<Order> findByStatusFilter(@Param("status") Order.OrderStatus status, Pageable pageable);
+
+  // 3. Khách hàng lấy danh sách đơn của họ (có lọc status)
+  // Lưu ý: Đổi Long userId thành kiểu dữ liệu ID tương ứng của User trong project của bạn (Long hoặc Integer)
+  @Query("SELECT o FROM Order o WHERE o.user.id = :userId AND (:status IS NULL OR o.status = :status)")
+  Page<Order> findByUserIdAndStatusFilter(@Param("userId") Long userId, @Param("status") Order.OrderStatus status, Pageable pageable);
+
+  // 4. Khách hàng xem chi tiết đơn của họ
+  Optional<Order> findByIdAndUserId(Integer id, Long userId);
 }
