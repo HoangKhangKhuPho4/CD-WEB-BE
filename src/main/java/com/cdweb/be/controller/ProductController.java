@@ -119,6 +119,19 @@ public class ProductController {
     return ResponseEntity.ok(ApiResponse.success("Products search completed", products));
   }
 
+  @GetMapping("/suggest")
+  @Operation(
+      summary = "Gợi ý tìm kiếm sản phẩm",
+      description = "Autocomplete header — keyword ≥ 2 ký tự, tối đa 20 kết quả")
+  public ResponseEntity<ApiResponse<List<ProductDto.SuggestResponse>>> suggestProducts(
+      @RequestParam(name = "keyword") String keyword,
+      @RequestParam(value = "product_type_id", required = false) Integer productTypeId,
+      @RequestParam(name = "limit", defaultValue = "8") int limit) {
+    List<ProductDto.SuggestResponse> items =
+        productService.suggestProducts(keyword, productTypeId, limit);
+    return ResponseEntity.ok(ApiResponse.success("Product suggestions retrieved", items));
+  }
+
   @GetMapping("/product-type/{productTypeId}")
   public ResponseEntity<ApiResponse<Page<ProductDto.Response>>> getProductsByProductType(
       @PathVariable("productTypeId") Integer productTypeId,

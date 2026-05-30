@@ -10,9 +10,14 @@ import com.cdweb.be.repository.OrderStatusHistoryRepository;
 import com.cdweb.be.repository.UserRepository;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -36,6 +41,7 @@ public class OrderManagementService {
     @Autowired private EmailService emailService;
 
     // ── Admin: danh sách đơn (có filter) ──
+    @Transactional(readOnly = true)
     public Page<OrderManagementDto.OrderSummaryResponse> adminGetOrders(
             String keyword, String statusStr, Pageable pageable) {
         // Nếu có truyền status dạng String từ FE, thử convert sang Enum để tìm
@@ -69,8 +75,16 @@ public class OrderManagementService {
         catch (IllegalArgumentException e) { throw new BadRequestException("Trạng thái không hợp lệ"); }
 
         validateTransition(order.getStatus(), toStatus);
+        assertStatusChangeAllowed(toStatus);
 
         User admin = userRepository.findByUsernameOrEmail(adminUsername, adminUsername).orElse(null);
+
+        if (req.getTrackingCode() != null && !req.getTrackingCode().isBlank()) {
+            order.setTrackingCode(req.getTrackingCode().trim());
+        }
+        if (req.getGhnOrderCode() != null && !req.getGhnOrderCode().isBlank()) {
+            order.setGhnOrderCode(req.getGhnOrderCode().trim());
+        }
 
         // Lưu lịch sử
         saveHistory(order, toStatus, req.getNote(), admin);
@@ -167,6 +181,49 @@ public class OrderManagementService {
                 .orElseThrow(() -> new BadRequestException("Đơn hàng không tồn tại: #" + id));
     }
 
+    private void assertStatusChangeAllowed(Order.OrderStatus toStatus) {
+        if (hasAnyAuthority("ROLE_ADMIN", "ORDER_MANAGE")) {
+            return;
+        }
+        switch (toStatus) {
+            case CONFIRMED -> {
+                if (!hasAnyAuthority("ORDER_CONFIRM")) {
+                    throw new BadRequestException("Bạn không có quyền xác nhận đơn hàng (ORDER_CONFIRM)");
+                }
+            }
+            case CANCELLED -> {
+                if (!hasAnyAuthority("ORDER_CANCEL")) {
+                    throw new BadRequestException("Bạn không có quyền hủy đơn hàng (ORDER_CANCEL)");
+                }
+            }
+            case SHIPPING -> {
+                if (!hasAnyAuthority("ORDER_ASSIGN_SHIPPING")) {
+                    throw new BadRequestException(
+                            "Bạn không có quyền chuyển sang giao hàng (ORDER_ASSIGN_SHIPPING)");
+                }
+            }
+            case DELIVERED -> {
+                if (!hasAnyAuthority("ORDER_TRACKING_UPDATE")) {
+                    throw new BadRequestException(
+                            "Bạn không có quyền cập nhật giao hàng (ORDER_TRACKING_UPDATE)");
+                }
+            }
+            default ->
+                    throw new BadRequestException(
+                            "Bạn không có quyền chuyển đơn sang trạng thái: " + toStatus);
+        }
+    }
+
+    private boolean hasAnyAuthority(String... codes) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            return false;
+        }
+        Collection<? extends GrantedAuthority> authorities = auth.getAuthorities();
+        Set<String> required = Set.of(codes);
+        return authorities.stream().map(GrantedAuthority::getAuthority).anyMatch(required::contains);
+    }
+
     private void validateTransition(Order.OrderStatus from, Order.OrderStatus to) {
         int fromIdx = VALID_TRANSITIONS.indexOf(from);
         int toIdx = VALID_TRANSITIONS.indexOf(to);
@@ -234,6 +291,7 @@ public class OrderManagementService {
         r.setPaymentMethod(o.getPaymentMethod() != null ? o.getPaymentMethod().name() : "");
         r.setPaymentStatus(o.getPaymentStatus() != null ? o.getPaymentStatus().name() : "");
         r.setGhnOrderCode(o.getGhnOrderCode());
+        r.setTrackingCode(o.getTrackingCode());
         r.setCreatedAt(o.getOrderDate());
 
         // Items
@@ -248,6 +306,7 @@ public class OrderManagementService {
                         pId = item.getVariant().getProduct().getId();
                     }
                 } catch (Exception ignored) {}
+                ir.setOrderDetailId(item.getId());
                 ir.setProductId(pId);
 
                 ir.setProductName(item.getProductName());

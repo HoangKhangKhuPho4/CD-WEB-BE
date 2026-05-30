@@ -1,6 +1,7 @@
 package com.cdweb.be.controller.admin;
 
 import com.cdweb.be.dto.statistics.ConversionRateStatsDTO;
+import com.cdweb.be.dto.statistics.StaffOverviewStatisticsDTO;
 import com.cdweb.be.dto.statistics.CustomerSegmentStatsDTO;
 import com.cdweb.be.dto.statistics.OrderStatusStatsDTO;
 import com.cdweb.be.dto.statistics.OverviewStatisticsDTO;
@@ -47,6 +48,14 @@ public class StatisticsController {
   @PreAuthorize("hasAnyAuthority('REPORT_REVENUE', 'ROLE_ADMIN')")
   public ResponseEntity<OverviewStatisticsDTO> getOverviewStatistics() {
     return ResponseEntity.ok(statisticsService.getOverviewStatistics());
+  }
+
+  @GetMapping("/staff-overview")
+  @PreAuthorize(
+      "hasAnyAuthority('ORDER_MANAGE', 'ORDER_VIEW_ALL', 'STOCK_IMPORT', 'REPORT_SALES', "
+          + "'INVENTORY_STAT', 'ROLE_ADMIN')")
+  public ResponseEntity<StaffOverviewStatisticsDTO> getStaffOverviewStatistics() {
+    return ResponseEntity.ok(statisticsService.getStaffOverviewStatistics());
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -128,13 +137,13 @@ public class StatisticsController {
   // ═══════════════════════════════════════════════════════════════════════════
 
   @GetMapping("/revenue")
-  @PreAuthorize("hasAuthority('REPORT_REVENUE')")
+  @PreAuthorize("hasAnyAuthority('REPORT_REVENUE', 'ROLE_ADMIN')")
   public RevenueStatisticsDTO getRevenueStatistics() {
     return statisticsService.getRevenueStatistics();
   }
 
   @GetMapping("/top-products-legacy")
-  @PreAuthorize("hasAnyAuthority('REPORT_REVENUE', 'REPORT_SALES')")
+  @PreAuthorize("hasAnyAuthority('REPORT_REVENUE', 'REPORT_SALES', 'ROLE_ADMIN')")
   public TopProductsStatisticsDTO getTopProductsStatistics() {
     return statisticsService.getTopProductsStatistics();
   }

@@ -26,6 +26,7 @@ public class UserService {
   private final ModelMapper modelMapper;
   private final PasswordEncoder passwordEncoder;
   private final AuditLogService auditLogService;
+  private final RbacService rbacService;
 
   public Page<UserDto.Response> getAllUsers(Pageable pageable) {
     return userRepository
@@ -49,15 +50,15 @@ public class UserService {
             userRepository
                     .findById(id)
                     .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
-    return modelMapper.map(user, UserDto.Response.class);
+    return rbacService.toUserResponse(user);
   }
 
   public UserDto.Response getUserByUsername(String username) {
     User user =
             userRepository
-                    .findByUsername(username)
+                    .findByUsernameOrEmail(username, username)
                     .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
-    return modelMapper.map(user, UserDto.Response.class);
+    return rbacService.toUserResponse(user);
   }
 
   public UserDto.Response createUser(UserDto.CreateRequest request) {
@@ -79,8 +80,8 @@ public class UserService {
     user.setGender(request.getGender());
     user.setEnabled(true);
 
-    Long roleId =
-            request.getRoleId() != null ? request.getRoleId() : 4;
+    Long roleId = request.getRoleId() != null ? request.getRoleId() : RbacService.CUSTOMER_ROLE_ID;
+    rbacService.assertStaffRoleAssignable(roleId);
     Role userRole =
             roleRepository
                     .findById(roleId)
@@ -118,7 +119,7 @@ public class UserService {
 
     User updatedUser = userRepository.save(user);
     auditLogService.log("UPDATE_USER", "User", updatedUser.getId().toString(), "Updated user info");
-    return modelMapper.map(updatedUser, UserDto.Response.class);
+    return rbacService.toUserResponse(updatedUser);
   }
 
   // Đã sửa: Integer -> Long, setStatus -> setEnabled
@@ -155,18 +156,28 @@ public class UserService {
             userRepository
                     .findById(id)
                     .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
-    // Đã sửa: logic đảo ngược Boolean
-    user.setEnabled(!user.getEnabled());
+    user.setEnabled(!user.isAccountEnabled());
     User updatedUser = userRepository.save(user);
     auditLogService.log(
             "TOGGLE_STATUS", "User", id.toString(), "New status: " + updatedUser.getEnabled());
-    return modelMapper.map(updatedUser, UserDto.Response.class);
+    return rbacService.toUserResponse(updatedUser);
   }
 
   public Page<UserDto.Response> searchUsers(String keyword, Pageable pageable) {
     return userRepository
             .searchUsers(keyword, pageable)
-            .map(user -> modelMapper.map(user, UserDto.Response.class));
+            .map(rbacService::toUserResponse);
+  }
+
+  @Transactional(readOnly = true)
+  public Page<UserDto.Response> getCustomersForStaff(String keyword, Pageable pageable) {
+    Page<User> page;
+    if (keyword != null && !keyword.trim().isEmpty()) {
+      page = userRepository.searchCustomers(keyword.trim(), pageable);
+    } else {
+      page = userRepository.findCustomers(pageable);
+    }
+    return page.map(u -> rbacService.toUserResponse(u));
   }
 
   public void changePassword(String username, UserDto.ChangePasswordRequest request) {

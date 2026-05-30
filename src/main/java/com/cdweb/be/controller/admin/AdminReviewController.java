@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/admin/reviews")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyAuthority('PRODUCT_MANAGE', 'WARRANTY_MANAGE', 'ROLE_ADMIN')")
 public class AdminReviewController {
 
   @Autowired private ReviewService reviewService;
@@ -58,7 +58,7 @@ public class AdminReviewController {
 
   // ─── POST /api/admin/reviews/{id}/reply — Phản hồi khách hàng ───────────
   @PostMapping("/{id}/reply")
-  @PreAuthorize("hasRole('ADMIN')")
+  @PreAuthorize("hasAnyAuthority('PRODUCT_MANAGE', 'WARRANTY_MANAGE', 'ROLE_ADMIN')")
   public ResponseEntity<ApiResponse<ReviewDto.Response>> replyReview(
       @PathVariable Integer id, @Valid @RequestBody ReviewDto.AdminReplyRequest request) {
 

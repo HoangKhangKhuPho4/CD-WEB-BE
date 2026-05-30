@@ -77,8 +77,8 @@ public class MomoService {
       // Build request body
       Map<String, Object> requestBody = new HashMap<>();
       requestBody.put("partnerCode", momoConfig.getPartnerCode());
-      requestBody.put("partnerName", "Electro Store");
-      requestBody.put("storeId", "ElectroStore");
+      requestBody.put("partnerName", "Bảo Khang Gadget");
+      requestBody.put("storeId", "BaoKhangGadget");
       requestBody.put("requestId", requestId);
       requestBody.put("amount", amount);
       requestBody.put("orderId", transactionRef);

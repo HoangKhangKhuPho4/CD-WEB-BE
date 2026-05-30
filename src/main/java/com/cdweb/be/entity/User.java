@@ -55,8 +55,20 @@ public class User {
   // STATUS & ROLES (Dùng cho Spring Security)
   // ==========================================
   @Builder.Default
-  @Column(name = "enabled")
+  @Column(name = "enabled", nullable = false)
   private Boolean enabled = true;
+
+  /** Trạng thái kích hoạt an toàn khi {@code enabled} trong DB bị NULL (dữ liệu cũ). */
+  public boolean isAccountEnabled() {
+    return Boolean.TRUE.equals(enabled);
+  }
+
+  /** Gán mặc định {@code true} nếu {@code enabled} đang NULL. */
+  public void ensureEnabledDefault() {
+    if (enabled == null) {
+      enabled = true;
+    }
+  }
 
   @EqualsAndHashCode.Exclude
   @ToString.Exclude
@@ -82,13 +94,16 @@ public class User {
   // ==========================================
   // LIFECYCLE HOOKS
   // ==========================================
+  @PostLoad
+  protected void onLoad() {
+    ensureEnabledDefault();
+  }
+
   @PrePersist
   protected void onCreate() {
     this.createdAt = LocalDateTime.now();
     this.updatedAt = LocalDateTime.now();
-    if (this.enabled == null) {
-      this.enabled = true;
-    }
+    ensureEnabledDefault();
     if (this.provider == null) {
       this.provider = "LOCAL";
     }
@@ -97,5 +112,7 @@ public class User {
   @PreUpdate
   protected void onUpdate() {
     this.updatedAt = LocalDateTime.now();
+    ensureEnabledDefault();
   }
+
 }

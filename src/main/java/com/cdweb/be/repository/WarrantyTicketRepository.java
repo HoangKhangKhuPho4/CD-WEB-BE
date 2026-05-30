@@ -1,6 +1,7 @@
 package com.cdweb.be.repository;
 
 import com.cdweb.be.entity.WarrantyTicket;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -30,4 +31,6 @@ public interface WarrantyTicketRepository extends JpaRepository<WarrantyTicket, 
 
   @Query("SELECT MAX(t.ticketCode) FROM WarrantyTicket t WHERE t.ticketCode LIKE :prefix%")
   String findMaxTicketCodeWithPrefix(@Param("prefix") String prefix);
+
+  List<WarrantyTicket> findByProductItemIdOrderByReceivedAtDesc(Integer productItemId);
 }

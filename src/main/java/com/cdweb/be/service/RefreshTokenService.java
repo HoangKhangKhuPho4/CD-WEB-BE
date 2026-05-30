@@ -1,6 +1,7 @@
 package com.cdweb.be.service;
 
 import com.cdweb.be.entity.RefreshToken;
+import com.cdweb.be.entity.User;
 import com.cdweb.be.repository.RefreshTokenRepository;
 import com.cdweb.be.repository.UserRepository;
 import java.time.Instant;
@@ -24,14 +25,17 @@ public class RefreshTokenService {
 
     @Transactional
     public RefreshToken createRefreshToken(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Mỗi user chỉ 1 refresh token (unique user_id). Xóa bản cũ trước khi insert mới.
+        refreshTokenRepository.deleteByUserId(userId);
+
         RefreshToken refreshToken = new RefreshToken();
-
-        refreshToken.setUser(userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found")));
+        refreshToken.setUser(user);
         refreshToken.setExpiryDate(Instant.now().plusMillis(refreshTokenDurationMs));
-        refreshToken.setToken(UUID.randomUUID().toString()); // Dùng UUID cho Refresh Token thay vì JWT
+        refreshToken.setToken(UUID.randomUUID().toString());
 
-        // Xóa token cũ của user này (nếu có) để đảm bảo mỗi người 1 token tại 1 thời điểm
-        refreshTokenRepository.deleteByUser(refreshToken.getUser());
         return refreshTokenRepository.save(refreshToken);
     }
 

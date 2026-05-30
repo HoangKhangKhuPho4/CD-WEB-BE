@@ -33,7 +33,7 @@ public class EmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
             helper.setTo(to);
-            helper.setSubject("Khôi phục mật khẩu – CD Web");
+            helper.setSubject("Khôi phục mật khẩu – Bảo Khang Gadget");
             helper.setText(buildPasswordResetHtml(name, resetLink), true);
             mailSender.send(message);
         } catch (MessagingException e) {
@@ -55,7 +55,7 @@ public class EmailService {
         String color = "cancelled".equals(status) ? "#e74c3c" : "#27ae60";
         return """
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
-              <h2 style="color: #3C50E0;">CD Web – Cập nhật đơn hàng</h2>
+              <h2 style="color: #3C50E0;">Bảo Khang Gadget – Cập nhật đơn hàng</h2>
               <p>Xin chào <strong>%s</strong>,</p>
               <p>Đơn hàng <strong>#%s</strong> của bạn đã được cập nhật:</p>
               <div style="background: #f5f5f5; border-left: 4px solid %s; padding: 16px; margin: 16px 0; border-radius: 4px;">
@@ -71,7 +71,7 @@ public class EmailService {
     private String buildPasswordResetHtml(String name, String resetLink) {
         return """
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
-              <h2 style="color: #3C50E0;">CD Web – Khôi phục mật khẩu</h2>
+              <h2 style="color: #3C50E0;">Bảo Khang Gadget – Khôi phục mật khẩu</h2>
               <p>Xin chào <strong>%s</strong>,</p>
               <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.</p>
               <p>Nhấn vào nút bên dưới để đặt lại mật khẩu (có hiệu lực trong <strong>60 phút</strong>):</p>

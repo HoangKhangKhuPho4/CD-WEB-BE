@@ -566,7 +566,7 @@ public class OrderService {
             List<OrderDetail> orderDetailsList = orderDetailRepository.findByOrderId(order.getId());
             String itemName =
                 orderDetailsList.isEmpty()
-                    ? "Đơn hàng Electro Store"
+                    ? "Đơn hàng Bảo Khang Gadget"
                     : orderDetailsList.get(0).getProductName();
             int totalQty = orderDetailsList.stream().mapToInt(OrderDetail::getQuantity).sum();
 

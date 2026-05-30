@@ -225,6 +225,40 @@ public class ProductService {
     return productRepository.findAll(spec, pageable).map(this::mapToResponse);
   }
 
+  /** Gợi ý sản phẩm cho ô tìm kiếm — keyword tối thiểu 2 ký tự. */
+  public List<ProductDto.SuggestResponse> suggestProducts(
+      String keyword, Integer productTypeId, int limit) {
+    if (keyword == null || keyword.trim().length() < 2) {
+      return List.of();
+    }
+    int capped = Math.min(Math.max(limit, 1), 20);
+    ProductDto.SearchRequest req = new ProductDto.SearchRequest();
+    req.setKeyword(keyword.trim());
+    req.setProductTypeId(productTypeId);
+    req.setPage(0);
+    req.setSize(capped);
+    req.setSortBy("name");
+    req.setSortDir("asc");
+
+    return searchProducts(req).getContent().stream()
+        .map(
+            p -> {
+              ProductDto.SuggestResponse s = new ProductDto.SuggestResponse();
+              s.setId(p.getId());
+              s.setName(p.getName());
+              s.setPrice(p.getPrice());
+              if (p.getImages() != null && !p.getImages().isEmpty()) {
+                s.setImageUrl(p.getImages().get(0).getLinkImage());
+              }
+              if (p.getProductType() != null) {
+                s.setCategoryId(p.getProductType().getId());
+                s.setCategoryName(p.getProductType().getName());
+              }
+              return s;
+            })
+        .collect(Collectors.toList());
+  }
+
   public Page<ProductDto.Response> getProductsByCategory(Long categoryId, Pageable pageable) {
     return productRepository
         .findByProductTypeIdAndIsActiveTrue(categoryId.intValue(), pageable)
@@ -452,9 +486,7 @@ public class ProductService {
     };
   }
 
-  // --- ADMIN METHODS STUBS ---
-  // TODO: These methods were referenced by AdminProductController but were missing.
-  // They need proper implementation!
+  // --- ADMIN PRODUCT MANAGEMENT ---
 
   public Page<ProductDto.AdminProductListResponse> adminGetAllProducts(
       String keyword,

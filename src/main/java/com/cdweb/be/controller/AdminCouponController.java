@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 /** Admin API - Quản lý mã giảm giá (Vouchers/Coupons) */
 @RestController
 @RequestMapping("/api/admin/coupons")
-@PreAuthorize("hasAuthority('PRODUCT_MANAGE')")
+@PreAuthorize("hasAnyAuthority('PRODUCT_MANAGE', 'ROLE_ADMIN')")
 @CrossOrigin(origins = "*")
 public class AdminCouponController {
 

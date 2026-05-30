@@ -14,6 +14,7 @@ import com.cdweb.be.repository.UserRepository;
 import com.cdweb.be.service.FacebookAuthService;
 import com.cdweb.be.service.GoogleAuthService;
 import com.cdweb.be.service.PasswordResetService;
+import com.cdweb.be.service.RbacService;
 import com.cdweb.be.service.RefreshTokenService;
 import com.cdweb.be.util.JwtTokenProvider;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
@@ -56,6 +57,7 @@ public class AuthController {
   @Autowired private PasswordResetService passwordResetService;
   @Autowired
   private RefreshTokenService refreshTokenService;
+  @Autowired private RbacService rbacService;
 
   @PostMapping("/login")
   @Operation(summary = "Đăng nhập", description = "Đăng nhập bằng Email và Mật khẩu để nhận JWT Token")
@@ -90,8 +92,7 @@ public class AuthController {
     user.setLastLoginAt(java.time.LocalDateTime.now());
     userRepository.save(user);
 
-    UserDto.Response userResponse = modelMapper.map(user, UserDto.Response.class);
-    // Lấy địa chỉ mặc định
+    UserDto.Response userResponse = rbacService.toUserResponse(user);
     addressRepository.findByUserIdOrderByIsDefaultDescCreatedAtDesc(user.getId()).stream()
             .findFirst()
             .ifPresent(addr -> userResponse.setAddress(addr.getAddressDetail()));
@@ -153,11 +154,11 @@ public class AuthController {
     user.setGender(signUpRequest.getGender());
     user.setEnabled(true);
 
-    Long roleId = (signUpRequest.getRoleId() != null) ? signUpRequest.getRoleId() : 4;
+    rbacService.assertRegisterRoleAllowed(signUpRequest.getRoleId());
     Role userRole =
             roleRepository
-                    .findById(roleId)
-                    .orElseThrow(() -> new BadRequestException("Role ID " + roleId + " not found"));
+                    .findByName(RbacService.ROLE_CUSTOMER)
+                    .orElseThrow(() -> new BadRequestException("Default CUSTOMER role not found"));
     user.setRoles(Collections.singleton(userRole));
 
     User result = userRepository.save(user);
@@ -174,7 +175,7 @@ public class AuthController {
       addressRepository.save(userAddress);
     }
 
-    UserDto.Response userResponse = modelMapper.map(result, UserDto.Response.class);
+    UserDto.Response userResponse = rbacService.toUserResponse(result);
     userResponse.setAddress(signUpRequest.getAddress());
 
     return ResponseEntity.status(HttpStatus.CREATED)
@@ -234,7 +235,7 @@ public class AuthController {
       user.setLastLoginAt(java.time.LocalDateTime.now());
       userRepository.save(user);
 
-      UserDto.Response userResponse = modelMapper.map(user, UserDto.Response.class);
+      UserDto.Response userResponse = rbacService.toUserResponse(user);
       UserDto.LoginResponse loginResponse = new UserDto.LoginResponse(jwt, "Bearer", userResponse);
       return ResponseEntity.ok(ApiResponse.success("Google Login successful", loginResponse));
     } catch (BadRequestException e) {
@@ -286,7 +287,7 @@ public class AuthController {
       user.setLastLoginAt(java.time.LocalDateTime.now());
       userRepository.save(user);
 
-      UserDto.Response userResponse = modelMapper.map(user, UserDto.Response.class);
+      UserDto.Response userResponse = rbacService.toUserResponse(user);
       UserDto.LoginResponse loginResponse = new UserDto.LoginResponse(jwt, "Bearer", userResponse);
       return ResponseEntity.ok(ApiResponse.success("Facebook Login successful", loginResponse));
     } catch (BadRequestException e) {

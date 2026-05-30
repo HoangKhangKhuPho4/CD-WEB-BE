@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/admin/users")
-@PreAuthorize("hasAuthority('USER_MANAGE')")
+@PreAuthorize("hasAnyAuthority('USER_MANAGE', 'ROLE_ADMIN')")
 @CrossOrigin(origins = "*")
 @RequiredArgsConstructor // Sử dụng để inject UserService và xóa bỏ cảnh báo @Autowired
 public class AdminUserController {

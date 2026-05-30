@@ -1,6 +1,8 @@
 package com.cdweb.be.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -26,7 +28,26 @@ public class RoleDto {
   @NoArgsConstructor
   @AllArgsConstructor
   public static class Response {
-    private Integer id;
+    private Long id;
     private String name;
+  }
+
+  @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class DetailResponse {
+    private Long id;
+    private String name;
+    private String description;
+    private List<Integer> permissionIds;
+    private List<PermissionDto.Response> permissions;
+  }
+
+  @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class UpdatePermissionsRequest {
+    @NotEmpty(message = "permissionIds is required")
+    private List<Integer> permissionIds;
   }
 }

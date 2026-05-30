@@ -45,14 +45,16 @@ public class UserDetailsServiceImpl implements UserDetailsService {
                             });
         }
 
+        boolean accountEnabled = user.isAccountEnabled();
+
         return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getUsername())
                 .password(user.getPassword())
                 .authorities(authorities)
                 .accountExpired(false)
-                .accountLocked(!user.getEnabled())
+                .accountLocked(!accountEnabled)
                 .credentialsExpired(false)
-                .disabled(!user.getEnabled())
+                .disabled(!accountEnabled)
                 .build();
     }
 }

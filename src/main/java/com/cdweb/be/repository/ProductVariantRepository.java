@@ -41,6 +41,11 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
   List<ProductVariant> findLowStockVariants();
 
   @Query(
+      "SELECT COUNT(v) FROM ProductVariant v "
+          + "WHERE v.isActive = true AND v.stockQuantity <= v.lowStockThreshold")
+  long countLowStockVariants();
+
+  @Query(
       "SELECT v FROM ProductVariant v "
           + "JOIN FETCH v.product p "
           + "WHERE v.isActive = true AND (LOWER(v.skuCode) LIKE LOWER(CONCAT('%', :keyword, '%')) "

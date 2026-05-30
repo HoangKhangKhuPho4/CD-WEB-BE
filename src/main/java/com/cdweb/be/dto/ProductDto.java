@@ -150,6 +150,19 @@ public class ProductDto {
     private int size = 10;
   }
 
+  /** Gợi ý tìm kiếm nhanh (header autocomplete). */
+  @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class SuggestResponse {
+    private Integer id;
+    private String name;
+    private Double price;
+    private String imageUrl;
+    private Integer categoryId;
+    private String categoryName;
+  }
+
   @Data
   @NoArgsConstructor
   @AllArgsConstructor

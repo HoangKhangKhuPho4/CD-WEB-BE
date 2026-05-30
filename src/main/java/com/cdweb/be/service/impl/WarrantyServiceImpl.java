@@ -1,12 +1,16 @@
 package com.cdweb.be.service.impl;
 
 import com.cdweb.be.dto.WarrantyDto;
+import com.cdweb.be.entity.Order;
+import com.cdweb.be.entity.OrderDetail;
+import com.cdweb.be.entity.OrderItem;
 import com.cdweb.be.entity.ProductItem;
 import com.cdweb.be.entity.ProductVariant;
 import com.cdweb.be.entity.User;
 import com.cdweb.be.entity.WarrantyTicket;
 import com.cdweb.be.exception.BadRequestException;
 import com.cdweb.be.exception.ResourceNotFoundException;
+import com.cdweb.be.repository.OrderItemRepository;
 import com.cdweb.be.repository.ProductItemRepository;
 import com.cdweb.be.repository.UserRepository;
 import com.cdweb.be.repository.WarrantyTicketRepository;
@@ -14,7 +18,9 @@ import com.cdweb.be.service.WarrantyService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,6 +34,8 @@ public class WarrantyServiceImpl implements WarrantyService {
   @Autowired private ProductItemRepository productItemRepository;
 
   @Autowired private WarrantyTicketRepository warrantyTicketRepository;
+
+  @Autowired private OrderItemRepository orderItemRepository;
 
   @Autowired private UserRepository userRepository;
 
@@ -113,6 +121,90 @@ public class WarrantyServiceImpl implements WarrantyService {
         .build();
   }
 
+  @Override
+  @Transactional(readOnly = true)
+  public WarrantyDto.LookupResponse lookupByCode(String imeiOrSerial) {
+    WarrantyDto.Response warranty = checkWarranty(imeiOrSerial);
+    Optional<ProductItem> itemOpt =
+        productItemRepository.findByImeiOrSerialNumber(imeiOrSerial, imeiOrSerial);
+
+    if (itemOpt.isEmpty()) {
+      return WarrantyDto.LookupResponse.builder()
+          .found(false)
+          .message(warranty.getMessage())
+          .warranty(warranty)
+          .repairTickets(List.of())
+          .build();
+    }
+
+    ProductItem item = itemOpt.get();
+    return WarrantyDto.LookupResponse.builder()
+        .found(true)
+        .message(warranty.getMessage())
+        .warranty(warranty)
+        .purchase(buildPurchaseInfo(item))
+        .repairTickets(
+            warrantyTicketRepository.findByProductItemIdOrderByReceivedAtDesc(item.getId()).stream()
+                .map(this::mapToPublicTicketSummary)
+                .collect(Collectors.toList()))
+        .build();
+  }
+
+  private WarrantyDto.PurchaseInfo buildPurchaseInfo(ProductItem item) {
+    List<OrderItem> links = orderItemRepository.findByProductItemIdWithOrder(item.getId());
+    if (!links.isEmpty()) {
+      OrderDetail od = links.get(0).getOrderDetail();
+      Order order = od.getOrder();
+      return WarrantyDto.PurchaseInfo.builder()
+          .orderCode(order.getOrderCode())
+          .orderDate(order.getOrderDate())
+          .orderStatus(order.getStatus().name())
+          .orderStatusDisplay(orderStatusDisplay(order.getStatus()))
+          .paymentMethod(order.getPaymentMethod().name())
+          .deliveredAt(order.getDeliveredAt())
+          .soldAt(item.getSoldAt())
+          .lineTotal(od.getTotalPrice())
+          .build();
+    }
+    if (item.getSoldAt() != null) {
+      return WarrantyDto.PurchaseInfo.builder().soldAt(item.getSoldAt()).build();
+    }
+    return null;
+  }
+
+  private String orderStatusDisplay(Order.OrderStatus status) {
+    if (status == null) return "";
+    return switch (status) {
+      case PENDING -> "Chờ xác nhận";
+      case CONFIRMED -> "Đã xác nhận";
+      case PROCESSING -> "Đang xử lý";
+      case SHIPPING -> "Đang giao";
+      case DELIVERED -> "Đã giao";
+      case COMPLETED -> "Hoàn thành";
+      case CANCELLED -> "Đã hủy";
+      case REFUNDED -> "Đã hoàn tiền";
+    };
+  }
+
+  private WarrantyDto.TicketPublicSummary mapToPublicTicketSummary(WarrantyTicket ticket) {
+    String statusDisplay =
+        switch (ticket.getStatus()) {
+          case PENDING -> "Chờ kiểm tra";
+          case IN_PROGRESS -> "Đang sửa chữa";
+          case COMPLETED -> "Đã sửa xong";
+          case CANCELLED -> "Đã hủy";
+          case RETURNED -> "Đã trả khách";
+        };
+    return WarrantyDto.TicketPublicSummary.builder()
+        .ticketCode(ticket.getTicketCode())
+        .status(ticket.getStatus().name())
+        .statusDisplay(statusDisplay)
+        .receivedAt(ticket.getReceivedAt())
+        .resolvedAt(ticket.getResolvedAt())
+        .issueDescription(ticket.getIssueDescription())
+        .build();
+  }
+
   // =========================================================================
   // TICKET MANAGEMENT (RMA)
   // =========================================================================
@@ -124,6 +216,33 @@ public class WarrantyServiceImpl implements WarrantyService {
         userRepository
             .findByUsernameOrEmail(username, username)
             .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+    return saveWarrantyTicket(request, user);
+  }
+
+  @Override
+  public WarrantyDto.TicketResponse createPublicWarrantyTicket(WarrantyDto.TicketRequest request) {
+    validateTicketRequest(request);
+    return saveWarrantyTicket(request, null);
+  }
+
+  private void validateTicketRequest(WarrantyDto.TicketRequest request) {
+    if (request.getImeiOrSerial() == null || request.getImeiOrSerial().isBlank()) {
+      throw new BadRequestException("Vui lòng nhập IMEI hoặc số serial.");
+    }
+    if (request.getCustomerName() == null || request.getCustomerName().isBlank()) {
+      throw new BadRequestException("Vui lòng nhập họ tên khách hàng.");
+    }
+    if (request.getCustomerPhone() == null || request.getCustomerPhone().isBlank()) {
+      throw new BadRequestException("Vui lòng nhập số điện thoại.");
+    }
+    if (request.getIssueDescription() == null || request.getIssueDescription().isBlank()) {
+      throw new BadRequestException("Vui lòng mô tả tình trạng lỗi.");
+    }
+  }
+
+  private WarrantyDto.TicketResponse saveWarrantyTicket(
+      WarrantyDto.TicketRequest request, User createdBy) {
+    validateTicketRequest(request);
 
     ProductItem productItem =
         productItemRepository
@@ -133,19 +252,23 @@ public class WarrantyServiceImpl implements WarrantyService {
                     new ResourceNotFoundException(
                         "ProductItem", "IMEI/Serial", request.getImeiOrSerial()));
 
-    // Chuyển trạng thái máy sang IN_REPAIR ngay khi tạo phiếu
     productItem.setStatus(ProductItem.ProductItemStatus.IN_REPAIR);
     productItemRepository.save(productItem);
 
     WarrantyTicket ticket = new WarrantyTicket();
     ticket.setProductItem(productItem);
-    ticket.setCustomerName(request.getCustomerName());
-    ticket.setCustomerPhone(request.getCustomerPhone());
-    ticket.setIssueDescription(request.getIssueDescription());
-    ticket.setCreatedBy(user);
+    ticket.setCustomerName(request.getCustomerName().trim());
+    ticket.setCustomerPhone(request.getCustomerPhone().trim());
+    ticket.setIssueDescription(request.getIssueDescription().trim());
+    ticket.setCreatedBy(createdBy);
     ticket.setStatus(WarrantyTicket.TicketStatus.PENDING);
+    ticket.setTicketCode(generateTicketCode());
 
-    // Generate Ticket Code: WR-YYYYMMDD-001
+    WarrantyTicket savedTicket = warrantyTicketRepository.save(ticket);
+    return mapToTicketResponse(savedTicket);
+  }
+
+  private String generateTicketCode() {
     String dateStr = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
     String prefix = "WR-" + dateStr + "-";
     String maxCode = warrantyTicketRepository.findMaxTicketCodeWithPrefix(prefix);
@@ -156,10 +279,7 @@ public class WarrantyServiceImpl implements WarrantyService {
       } catch (NumberFormatException ignored) {
       }
     }
-    ticket.setTicketCode(prefix + String.format("%03d", seq));
-
-    WarrantyTicket savedTicket = warrantyTicketRepository.save(ticket);
-    return mapToTicketResponse(savedTicket);
+    return prefix + String.format("%03d", seq);
   }
 
   @Override

@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
 /** Admin API — Quản lý Nhà sản xuất / Thương hiệu. */
 @RestController
 @RequestMapping("/api/admin/producers")
-@PreAuthorize("hasAuthority('PRODUCT_MANAGE')")
+@PreAuthorize("hasAnyAuthority('PRODUCT_MANAGE', 'PRODUCT_CREATE', 'PRODUCT_UPDATE', 'ROLE_ADMIN')")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
 public class AdminProducerController {

@@ -85,6 +85,9 @@ public class UserDto {
 
     private Set<RoleDto> roles;
 
+    /** Mã quyền gộp từ tất cả role (dùng cho FE ẩn menu / guard). */
+    private Set<String> permissions;
+
     // Helper cho logic cũ
     public Integer getStatus() {
       return Boolean.TRUE.equals(enabled) ? 1 : 0;

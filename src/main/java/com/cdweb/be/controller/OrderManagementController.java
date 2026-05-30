@@ -1,10 +1,13 @@
 package com.cdweb.be.controller;
 
 import com.cdweb.be.dto.ApiResponse;
+import com.cdweb.be.dto.OrderDto;
 import com.cdweb.be.dto.OrderManagementDto;
 import com.cdweb.be.service.OrderManagementService;
+import com.cdweb.be.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.security.Principal;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -20,13 +23,14 @@ import org.springframework.web.bind.annotation.*;
 public class OrderManagementController {
 
     @Autowired private OrderManagementService orderManagementService;
+    @Autowired private OrderService orderService;
 
     // ═══════════════════════════════════════
     //  ADMIN ENDPOINTS
     // ═══════════════════════════════════════
 
     @GetMapping("/api/admin/orders")
-    @PreAuthorize("hasAnyAuthority('ORDER_MANAGE', 'ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ORDER_MANAGE', 'ORDER_VIEW_ALL', 'ROLE_ADMIN')")
     @Operation(summary = "[Admin] Danh sách đơn hàng", description = "Tìm kiếm, lọc và phân trang đơn hàng")
     public ResponseEntity<ApiResponse<Page<OrderManagementDto.OrderSummaryResponse>>> adminGetOrders(
             @RequestParam(required = false) String keyword,
@@ -36,14 +40,17 @@ public class OrderManagementController {
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
 
-        Sort sort = sortDir.equalsIgnoreCase("asc") ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
+        String orderSortField = resolveOrderSortField(sortBy);
+        Sort sort = sortDir.equalsIgnoreCase("asc")
+                ? Sort.by(orderSortField).ascending()
+                : Sort.by(orderSortField).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
         Page<OrderManagementDto.OrderSummaryResponse> result = orderManagementService.adminGetOrders(keyword, status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách đơn hàng thành công", result));
     }
 
     @GetMapping("/api/admin/orders/{id}")
-    @PreAuthorize("hasAnyAuthority('ORDER_MANAGE', 'ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ORDER_VIEW_ALL', 'ORDER_MANAGE', 'ROLE_ADMIN')")
     @Operation(summary = "[Admin] Chi tiết đơn hàng (có timeline)")
     public ResponseEntity<ApiResponse<OrderManagementDto.OrderDetailResponse>> adminGetOrderDetail(
             @PathVariable Integer id) {
@@ -52,7 +59,9 @@ public class OrderManagementController {
     }
 
     @PatchMapping("/api/admin/orders/{id}/status")
-    @PreAuthorize("hasAnyAuthority('ORDER_MANAGE', 'ADMIN')")
+    @PreAuthorize(
+            "hasAnyAuthority('ORDER_MANAGE', 'ORDER_CONFIRM', 'ORDER_CANCEL', "
+                    + "'ORDER_ASSIGN_SHIPPING', 'ORDER_TRACKING_UPDATE', 'ROLE_ADMIN')")
     @Operation(summary = "[Admin] Cập nhật trạng thái đơn")
     public ResponseEntity<ApiResponse<OrderManagementDto.OrderDetailResponse>> updateStatus(
             @PathVariable Integer id,
@@ -63,13 +72,24 @@ public class OrderManagementController {
     }
 
     @PatchMapping("/api/admin/orders/bulk-status")
-    @PreAuthorize("hasAnyAuthority('ORDER_MANAGE', 'ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ORDER_MANAGE', 'ROLE_ADMIN')")
     @Operation(summary = "[Admin] Cập nhật trạng thái hàng loạt")
     public ResponseEntity<ApiResponse<OrderManagementDto.BulkUpdateResult>> bulkUpdateStatus(
             @RequestBody OrderManagementDto.BulkUpdateStatusRequest request,
             Principal principal) {
         OrderManagementDto.BulkUpdateResult result = orderManagementService.bulkUpdateStatus(request, principal.getName());
         return ResponseEntity.ok(ApiResponse.success("Cập nhật hàng loạt hoàn tất", result));
+    }
+
+    @PostMapping("/api/admin/orders/{id}/assign-imei")
+    @PreAuthorize("hasAnyAuthority('ORDER_CONFIRM', 'IMEI_MANAGE', 'ORDER_MANAGE', 'ROLE_ADMIN')")
+    @Operation(summary = "[Admin/Sales] Gán IMEI cho dòng đơn hàng")
+    public ResponseEntity<ApiResponse<OrderManagementDto.OrderDetailResponse>> assignImei(
+            @PathVariable Integer id,
+            @Valid @RequestBody OrderDto.AssignImeiRequest request) {
+        orderService.assignImeiToOrder(id, request);
+        OrderManagementDto.OrderDetailResponse result = orderManagementService.adminGetOrderDetail(id);
+        return ResponseEntity.ok(ApiResponse.success("Gán IMEI thành công", result));
     }
 
     // ═══════════════════════════════════════
@@ -84,7 +104,7 @@ public class OrderManagementController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             Principal principal) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Pageable pageable = PageRequest.of(page, size, Sort.by("orderDate").descending());
         Page<OrderManagementDto.OrderSummaryResponse> result = orderManagementService.customerGetOrders(principal.getName(), status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử đơn hàng thành công", result));
     }
@@ -107,5 +127,13 @@ public class OrderManagementController {
             Principal principal) {
         OrderManagementDto.OrderDetailResponse result = orderManagementService.cancelOrder(principal.getName(), id, reason);
         return ResponseEntity.ok(ApiResponse.success("Hủy đơn hàng thành công", result));
+    }
+
+    /** Entity Order dùng {@code orderDate}, FE/API thường gửi {@code createdAt}. */
+    private static String resolveOrderSortField(String sortBy) {
+        if (sortBy == null || sortBy.isBlank() || "createdAt".equalsIgnoreCase(sortBy)) {
+            return "orderDate";
+        }
+        return sortBy;
     }
 }

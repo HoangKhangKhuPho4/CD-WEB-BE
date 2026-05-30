@@ -25,6 +25,9 @@ buildNumber.properties
 # VS Code
 .vscode/
 
+# Qodo AI (local tooling — không đưa lên repo)
+.qodo/
+
 # Logs
 *.log
 

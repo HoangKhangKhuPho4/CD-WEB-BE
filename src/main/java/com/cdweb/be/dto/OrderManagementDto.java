@@ -16,6 +16,10 @@ public class OrderManagementDto {
     public static class UpdateStatusRequest {
         private String status; // pending|confirmed|shipping|delivered|cancelled
         private String note;
+        /** Mã vận đơn nội bộ (khi chuyển sang shipping). */
+        private String trackingCode;
+        /** Mã vận đơn GHN. */
+        private String ghnOrderCode;
     }
 
     // ── Admin: cập nhật hàng loạt ──
@@ -58,6 +62,7 @@ public class OrderManagementDto {
         private String paymentMethod;
         private String paymentStatus;
         private String ghnOrderCode;    // mã vận đơn GHN
+        private String trackingCode;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
         private List<OrderItemResponse> items;
@@ -68,6 +73,7 @@ public class OrderManagementDto {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class OrderItemResponse {
+        private Integer orderDetailId;
         private Integer productId;
         private String productName;
         private String variantInfo; // size/màu

@@ -8,12 +8,16 @@ import org.springframework.data.domain.Pageable;
 public interface WarrantyService {
   WarrantyDto.Response checkWarranty(String imeiOrSerial);
 
+  WarrantyDto.LookupResponse lookupByCode(String imeiOrSerial);
+
   WarrantyDto.Response updateWarrantyStatus(
       String imeiOrSerial, ProductItem.ProductItemStatus status);
 
   // Ticket Management
   WarrantyDto.TicketResponse createWarrantyTicket(
       String username, WarrantyDto.TicketRequest request);
+
+  WarrantyDto.TicketResponse createPublicWarrantyTicket(WarrantyDto.TicketRequest request);
 
   WarrantyDto.TicketResponse getTicketById(Integer id);
 

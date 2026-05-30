@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/admin/categories")
-@PreAuthorize("hasAuthority('PRODUCT_MANAGE')")
+@PreAuthorize("hasAnyAuthority('PRODUCT_MANAGE', 'PRODUCT_CREATE', 'PRODUCT_UPDATE', 'ROLE_ADMIN')")
 @CrossOrigin(origins = "*")
 public class AdminCategoryController {
 

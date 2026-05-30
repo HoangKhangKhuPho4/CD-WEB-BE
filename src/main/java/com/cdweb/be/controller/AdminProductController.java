@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/admin/products")
-@PreAuthorize("hasAuthority('PRODUCT_MANAGE')")
+@PreAuthorize("hasAnyAuthority('PRODUCT_MANAGE', 'PRODUCT_CREATE', 'PRODUCT_UPDATE', 'ROLE_ADMIN')")
 @Tag(name = "Quản trị Sản phẩm (Admin Product)", description = "Các API dành cho Admin quản lý kho hàng, variant và hình ảnh")
 public class AdminProductController {
 

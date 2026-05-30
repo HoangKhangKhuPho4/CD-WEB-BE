@@ -9,6 +9,10 @@ import com.cdweb.be.service.InventoryService;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -84,5 +88,17 @@ public class AdminInventoryController {
     List<com.cdweb.be.dto.InventoryResponseDto> transactions =
         inventoryService.getInventoryTransactions();
     return ResponseEntity.ok(ApiResponse.success("Lịch sử biến động kho", transactions));
+  }
+
+  // ─── GET /api/admin/inventory/product-items — Danh sách IMEI/Serial (phân trang) ──
+  @GetMapping("/product-items")
+  @PreAuthorize("hasAnyAuthority('IMEI_MANAGE', 'ROLE_ADMIN')")
+  public ResponseEntity<ApiResponse<Page<com.cdweb.be.dto.ProductItemListDto>>> listProductItems(
+      @RequestParam(value = "keyword", required = false) String keyword,
+      @RequestParam(value = "page", defaultValue = "0") int page,
+      @RequestParam(value = "size", defaultValue = "15") int size) {
+    Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+    return ResponseEntity.ok(
+        ApiResponse.success("Danh sách IMEI", inventoryService.listProductItems(keyword, pageable)));
   }
 }

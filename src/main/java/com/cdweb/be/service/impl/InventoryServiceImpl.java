@@ -5,6 +5,7 @@ import com.cdweb.be.dto.ImportStockItemDto;
 import com.cdweb.be.dto.ImportStockRequest;
 import com.cdweb.be.dto.InventoryResponseDto;
 import com.cdweb.be.dto.InventoryStatDto;
+import com.cdweb.be.dto.ProductItemListDto;
 import com.cdweb.be.dto.ReturnStockRequest;
 import com.cdweb.be.dto.VariantAutocompleteDto;
 import com.cdweb.be.entity.Inventory;
@@ -12,7 +13,9 @@ import com.cdweb.be.entity.ProductItem;
 import com.cdweb.be.entity.ProductVariant;
 import com.cdweb.be.entity.User;
 import com.cdweb.be.exception.ResourceNotFoundException;
+import com.cdweb.be.entity.OrderItem;
 import com.cdweb.be.repository.InventoryRepository;
+import com.cdweb.be.repository.OrderItemRepository;
 import com.cdweb.be.repository.ProductItemRepository;
 import com.cdweb.be.repository.ProductVariantRepository;
 import com.cdweb.be.repository.UserRepository;
@@ -24,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
@@ -39,6 +44,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class InventoryServiceImpl implements InventoryService {
 
+  private final OrderItemRepository orderItemRepository;
   private final ProductVariantRepository productVariantRepository;
   private final ProductItemRepository productItemRepository;
   private final InventoryRepository inventoryRepository;
@@ -327,6 +333,39 @@ public class InventoryServiceImpl implements InventoryService {
                                     .userName(i.getUser().getFullName()) // ĐÃ SỬA: .getName() -> .getFullName()
                                     .build())
             .collect(Collectors.toList());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<ProductItemListDto> listProductItems(String keyword) {
+    return listProductItems(keyword, Pageable.unpaged()).getContent();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Page<ProductItemListDto> listProductItems(String keyword, Pageable pageable) {
+    String kw = keyword == null ? "" : keyword.trim();
+    return productItemRepository
+        .searchItems(kw, pageable)
+        .map(
+            pi -> {
+              String orderCode = null;
+              List<OrderItem> links = orderItemRepository.findByProductItemIdWithOrder(pi.getId());
+              if (!links.isEmpty() && links.get(0).getOrderDetail().getOrder() != null) {
+                orderCode = links.get(0).getOrderDetail().getOrder().getOrderCode();
+              }
+              return ProductItemListDto.builder()
+                  .id(pi.getId())
+                  .imei(pi.getImei())
+                  .serialNumber(pi.getSerialNumber())
+                  .productName(pi.getVariant().getProduct().getName())
+                  .variantName(pi.getVariant().getVariantName())
+                  .skuCode(pi.getVariant().getSkuCode())
+                  .status(pi.getStatus())
+                  .orderCode(orderCode)
+                  .createdAt(pi.getCreatedAt())
+                  .build();
+            });
   }
 
   private User getCurrentUser() {

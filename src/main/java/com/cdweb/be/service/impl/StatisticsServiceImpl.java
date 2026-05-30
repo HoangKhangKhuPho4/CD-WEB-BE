@@ -38,6 +38,8 @@ public class StatisticsServiceImpl implements StatisticsService {
 
   @Autowired private ProductVariantRepository productVariantRepository;
 
+  @Autowired private com.cdweb.be.repository.UserRepository userRepository;
+
   @Autowired
   private com.cdweb.be.repository.UserInteractionRepository
       userInteractionRepository; // ✅ Thêm Repository
@@ -516,14 +518,46 @@ public class StatisticsServiceImpl implements StatisticsService {
 
   @Override
   public RevenueStatisticsDTO getRevenueStatistics() {
-    // TODO: Có thể delegate sang getRevenueChart ở phase sau
-    return new RevenueStatisticsDTO();
+    RevenueChartDTO chart = getRevenueChart("day", null, null);
+    List<RevenueStatisticsDTO.DailyRevenueDTO> daily =
+        chart.getDataPoints() == null
+            ? List.of()
+            : chart.getDataPoints().stream()
+                .map(
+                    dp ->
+                        new RevenueStatisticsDTO.DailyRevenueDTO(
+                            dp.getLabel(), dp.getRevenue()))
+                .collect(Collectors.toList());
+    RevenueStatisticsDTO dto = new RevenueStatisticsDTO();
+    dto.setTotalRevenue(chart.getTotalRevenue() != null ? chart.getTotalRevenue() : BigDecimal.ZERO);
+    dto.setDailyRevenue(daily);
+    return dto;
   }
 
   @Override
   public TopProductsStatisticsDTO getTopProductsStatistics() {
-    // TODO: Có thể delegate sang getTopProductStats ở phase sau
-    return new TopProductsStatisticsDTO();
+    TopProductStatsDTO stats = getTopProductStats("best-selling", 10);
+    TopProductsStatisticsDTO dto = new TopProductsStatisticsDTO();
+    if (stats.getProducts() == null) {
+      dto.setTopProducts(List.of());
+      return dto;
+    }
+    List<TopProductDTO> legacy =
+        stats.getProducts().stream()
+            .map(
+                p -> {
+                  TopProductDTO item = new TopProductDTO();
+                  item.setProductId(p.getProductId() != null ? p.getProductId().longValue() : 0L);
+                  item.setProductName(p.getProductName());
+                  item.setQuantitySold(
+                      p.getQuantitySold() != null ? p.getQuantitySold().intValue() : 0);
+                  item.setTotalRevenue(
+                      p.getRevenue() != null ? p.getRevenue().doubleValue() : 0.0);
+                  return item;
+                })
+            .collect(Collectors.toList());
+    dto.setTopProducts(legacy);
+    return dto;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -570,5 +604,30 @@ public class StatisticsServiceImpl implements StatisticsService {
   private int toInt(Object value) {
     if (value == null) return 0;
     return ((Number) value).intValue();
+  }
+
+  @Override
+  public StaffOverviewStatisticsDTO getStaffOverviewStatistics() {
+    LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+    LocalDateTime endOfDay = LocalDate.now().atTime(LocalTime.MAX);
+    Long ordersToday =
+        orderRepository.countOrdersByDateRange(startOfDay, endOfDay, CANCELLED_STATUS);
+
+    long pending = nullSafeCount(orderRepository.countByStatus(Order.OrderStatus.PENDING));
+    long confirmed = nullSafeCount(orderRepository.countByStatus(Order.OrderStatus.CONFIRMED));
+    long shipping = nullSafeCount(orderRepository.countByStatus(Order.OrderStatus.SHIPPING));
+
+    return StaffOverviewStatisticsDTO.builder()
+        .pendingOrders(pending)
+        .confirmedOrders(confirmed)
+        .shippingOrders(shipping)
+        .ordersToday(ordersToday != null ? ordersToday : 0L)
+        .lowStockVariants(productVariantRepository.countLowStockVariants())
+        .customerAccounts(userRepository.countCustomerAccounts())
+        .build();
+  }
+
+  private long nullSafeCount(Long value) {
+    return value != null ? value : 0L;
   }
 }

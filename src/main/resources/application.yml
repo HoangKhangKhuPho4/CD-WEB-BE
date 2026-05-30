@@ -5,7 +5,7 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3306/cd_web
     username: root
-    password: 12345
+    password:
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -74,6 +74,10 @@ ghn:
 app:
   frontend-url: ${APP_FRONTEND_URL:http://localhost:3000}
   backend-url: ${APP_BACKEND_URL:http://localhost:8080}
+  server:
+    url: ${APP_BACKEND_URL:http://localhost:8080}
+  ai:
+    base-url: ${AI_SERVICE_BASE_URL:http://localhost:5000}
   password-reset-expiry: 3600000  # Dùng cho code mới (ms)
   password-reset:
     frontend-url: ${APP_FRONTEND_URL:http://localhost:3000}/reset-password

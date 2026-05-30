@@ -114,9 +114,10 @@ public class WishlistService {
   }
 
   // --- HELPERS ---
-  private User findUser(String username) {
-    return userRepository.findByUsername(username)
-            .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+  private User findUser(String usernameOrEmail) {
+    return userRepository
+            .findByUsernameOrEmail(usernameOrEmail, usernameOrEmail)
+            .orElseThrow(() -> new ResourceNotFoundException("User", "username", usernameOrEmail));
   }
 
   private WishlistDto.Response mapToResponse(Wishlist wishlist) {

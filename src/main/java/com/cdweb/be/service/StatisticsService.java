@@ -33,4 +33,7 @@ public interface StatisticsService {
   RevenueStatisticsDTO getRevenueStatistics();
 
   TopProductsStatisticsDTO getTopProductsStatistics();
+
+  /** KPI cho nhân viên kho / sale (không cần quyền doanh thu). */
+  StaffOverviewStatisticsDTO getStaffOverviewStatistics();
 }

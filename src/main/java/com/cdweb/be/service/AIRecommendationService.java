@@ -25,9 +25,11 @@ public class AIRecommendationService {
   @Value("${app.server.url:http://localhost:8080}")
   private String serverUrl;
 
+  @Autowired private SystemConfigService systemConfigService;
+
   public List<ProductDto.Response> getRecommendationsForUser(Integer userId) {
-    // Gọi sang AI Microservice Flask vừa dựng ở Port 5000
-    String url = "http://localhost:5000/recommend/" + userId + "?top_k=10";
+    String baseUrl = systemConfigService.resolveAiBaseUrl();
+    String url = baseUrl + "/recommend/" + userId + "?top_k=10";
     List<ProductDto.Response> result = new ArrayList<>();
 
     try {
