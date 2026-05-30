@@ -41,4 +41,6 @@ public interface ReviewRepository extends JpaRepository<Review, Integer> {
   @Query(
           "SELECT r.rating, COUNT(r) FROM Review r WHERE r.product.id = :productId AND r.isApproved = true GROUP BY r.rating")
   List<Object[]> countByProductIdGroupByRating(@Param("productId") Integer productId);
+
+  Page<Review> findByIsApprovedTrueOrderByCreatedAtDesc(Pageable pageable);
 }

@@ -67,6 +67,16 @@ public class OrderController {
     return ResponseEntity.ok(ApiResponse.success("Đơn hàng đã được hủy thành công", order));
   }
 
+  // ─── POST /api/orders/{orderCode}/reorder — Đặt lại (thêm vào giỏ) ─────────
+  @PostMapping("/{orderCode}/reorder")
+  @PreAuthorize("hasAuthority('USER_ORDER_HISTORY')")
+  public ResponseEntity<ApiResponse<com.cdweb.be.dto.CartDto.CartResponse>> reorder(
+      @PathVariable("orderCode") String orderCode) {
+    String username = SecurityContextHolder.getContext().getAuthentication().getName();
+    com.cdweb.be.dto.CartDto.CartResponse cart = orderService.reorder(username, orderCode);
+    return ResponseEntity.ok(ApiResponse.success("Đã thêm sản phẩm vào giỏ hàng", cart));
+  }
+
   // ─── GET /api/orders/preview-coupon?code=XXX — Xem trước giảm giá ────────
   @GetMapping("/preview-coupon")
   @PreAuthorize("hasAnyAuthority('ORDER_CREATE', 'CHECKOUT_PAYMENT')")

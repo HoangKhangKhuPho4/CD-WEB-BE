@@ -4,6 +4,7 @@ import com.cdweb.be.dto.ApiResponse;
 import com.cdweb.be.dto.ReviewDto;
 import com.cdweb.be.service.ReviewService;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -45,6 +46,14 @@ public class ReviewController {
 
     ReviewDto.ReviewSummary summary = reviewService.getReviewSummary(productId);
     return ResponseEntity.ok(ApiResponse.success("Review summary retrieved successfully", summary));
+  }
+
+  // ─── GET /api/reviews/recent — Đánh giá mới (trang chủ) ───────────────────
+  @GetMapping("/recent")
+  public ResponseEntity<ApiResponse<List<ReviewDto.Response>>> getRecentReviews(
+      @RequestParam(defaultValue = "8") int size) {
+    List<ReviewDto.Response> reviews = reviewService.getRecentApprovedReviews(size);
+    return ResponseEntity.ok(ApiResponse.success("Recent reviews retrieved successfully", reviews));
   }
 
   // ─── GET /api/reviews/my — Đánh giá của tôi ─────────────────────────────

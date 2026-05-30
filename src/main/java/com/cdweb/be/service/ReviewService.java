@@ -27,7 +27,7 @@ public class ReviewService {
 
   @Transactional(readOnly = true)
   public Page<ReviewDto.Response> getProductReviews(
-          Integer productId, Integer rating, Pageable pageable) {
+      Integer productId, Integer rating, Pageable pageable) {
     if (!productRepository.existsById(productId)) {
       throw new ResourceNotFoundException("Product", "id", productId);
     }
@@ -68,6 +68,17 @@ public class ReviewService {
     summary.setTotalReviews(totalReviews != null ? totalReviews : 0);
     summary.setRatingDistribution(distribution);
     return summary;
+  }
+
+  /** Đánh giá đã duyệt mới nhất — dùng cho trang chủ. */
+  @Transactional(readOnly = true)
+  public List<ReviewDto.Response> getRecentApprovedReviews(int size) {
+    int limit = Math.min(Math.max(size, 1), 20);
+    return reviewRepository
+        .findByIsApprovedTrueOrderByCreatedAtDesc(
+            org.springframework.data.domain.PageRequest.of(0, limit))
+        .map(this::mapToResponse)
+        .getContent();
   }
 
   @Transactional(readOnly = true)

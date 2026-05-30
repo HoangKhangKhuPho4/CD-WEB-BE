@@ -258,6 +258,15 @@ public class GHNDto {
   // ═══════════════════════════════════════════════════════════════════════════
 
   @Data
+  public static class PrintLabelResponse {
+    /** Token in nhãn GHN (A5) */
+    private String token;
+    /** URL mở tab in nhãn */
+    private String printUrl;
+    private String ghnOrderCode;
+  }
+
+  @Data
   public static class TrackingResponse {
     private String orderCode; // Mã vận đơn GHN
     private String status; // ready_to_pick, picking, delivering, delivered, cancel...

@@ -1,10 +1,13 @@
 package com.cdweb.be.controller;
 
 import com.cdweb.be.dto.ApiResponse;
+import com.cdweb.be.dto.GHNDto;
 import com.cdweb.be.dto.OrderDto;
 import com.cdweb.be.dto.OrderManagementDto;
+import com.cdweb.be.dto.PaymentDto;
 import com.cdweb.be.service.OrderManagementService;
 import com.cdweb.be.service.OrderService;
+import com.cdweb.be.service.payment.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -24,6 +27,7 @@ public class OrderManagementController {
 
     @Autowired private OrderManagementService orderManagementService;
     @Autowired private OrderService orderService;
+    @Autowired private PaymentService paymentService;
 
     // ═══════════════════════════════════════
     //  ADMIN ENDPOINTS
@@ -90,6 +94,26 @@ public class OrderManagementController {
         orderService.assignImeiToOrder(id, request);
         OrderManagementDto.OrderDetailResponse result = orderManagementService.adminGetOrderDetail(id);
         return ResponseEntity.ok(ApiResponse.success("Gán IMEI thành công", result));
+    }
+
+    @PostMapping("/api/admin/orders/{id}/refund-vnpay")
+    @PreAuthorize("hasAnyAuthority('ORDER_MANAGE', 'ROLE_ADMIN')")
+    @Operation(summary = "[Admin] Hoàn tiền VNPay cho đơn đã thanh toán")
+    public ResponseEntity<ApiResponse<PaymentDto.RefundResponse>> refundVnpay(
+            @PathVariable Integer id, Principal principal) {
+        PaymentDto.RefundResponse result =
+                paymentService.refundOrderVnpay(id, principal.getName());
+        String msg = result.isSuccess() ? "Hoàn tiền VNPay thành công" : result.getMessage();
+        return ResponseEntity.ok(ApiResponse.success(msg, result));
+    }
+
+    @GetMapping("/api/admin/orders/{id}/ghn-print-label")
+    @PreAuthorize("hasAnyAuthority('ORDER_MANAGE', 'ORDER_ASSIGN_SHIPPING', 'ROLE_ADMIN')")
+    @Operation(summary = "[Admin] Lấy URL in nhãn vận đơn GHN (PDF/A5)")
+    public ResponseEntity<ApiResponse<GHNDto.PrintLabelResponse>> ghnPrintLabel(
+            @PathVariable Integer id) {
+        GHNDto.PrintLabelResponse result = orderService.getGhnPrintLabel(id);
+        return ResponseEntity.ok(ApiResponse.success("Lấy link in nhãn thành công", result));
     }
 
     // ═══════════════════════════════════════

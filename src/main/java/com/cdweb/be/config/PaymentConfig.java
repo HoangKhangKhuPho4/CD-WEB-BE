@@ -35,6 +35,9 @@ public class PaymentConfig {
     private String orderType = "other";
     private String locale = "vn";
     private String currCode = "VND";
+    private String refundCommand = "refund";
+    /** API hoàn tiền (cùng host merchant_webapi) */
+    private String refundApiUrl = "https://sandbox.vnpayment.vn/merchant_webapi/api/transaction";
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

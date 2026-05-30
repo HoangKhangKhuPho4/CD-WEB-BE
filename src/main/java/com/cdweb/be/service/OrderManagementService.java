@@ -1,13 +1,18 @@
 package com.cdweb.be.service;
 
+import com.cdweb.be.dto.GHNDto;
 import com.cdweb.be.dto.OrderManagementDto;
 import com.cdweb.be.entity.Order;
+import com.cdweb.be.entity.OrderDetail;
 import com.cdweb.be.entity.OrderStatusHistory;
 import com.cdweb.be.entity.User;
 import com.cdweb.be.exception.BadRequestException;
+import com.cdweb.be.repository.OrderDetailRepository;
 import com.cdweb.be.repository.OrderRepository;
 import com.cdweb.be.repository.OrderStatusHistoryRepository;
 import com.cdweb.be.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -26,6 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class OrderManagementService {
 
+    private static final Logger log = LoggerFactory.getLogger(OrderManagementService.class);
+
     // 1. Đổi List<String> thành List<Order.OrderStatus>
     private static final List<Order.OrderStatus> VALID_TRANSITIONS = List.of(
             Order.OrderStatus.PENDING,
@@ -36,9 +43,11 @@ public class OrderManagementService {
     );
 
     @Autowired private OrderRepository orderRepository;
+    @Autowired private OrderDetailRepository orderDetailRepository;
     @Autowired private OrderStatusHistoryRepository historyRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private EmailService emailService;
+    @Autowired private GhnService ghnService;
 
     // ── Admin: danh sách đơn (có filter) ──
     @Transactional(readOnly = true)
@@ -84,6 +93,10 @@ public class OrderManagementService {
         }
         if (req.getGhnOrderCode() != null && !req.getGhnOrderCode().isBlank()) {
             order.setGhnOrderCode(req.getGhnOrderCode().trim());
+        }
+
+        if (toStatus == Order.OrderStatus.SHIPPING) {
+            createGhnShipmentIfPossible(order, req);
         }
 
         // Lưu lịch sử
@@ -241,6 +254,55 @@ public class OrderManagementService {
         h.setNote(note);
         h.setChangedBy(changedBy);
         historyRepository.save(h);
+    }
+
+    private void createGhnShipmentIfPossible(Order order, OrderManagementDto.UpdateStatusRequest req) {
+        if (order.getToDistrictId() == null || order.getToWardCode() == null) {
+            if (req.getTrackingCode() != null && !req.getTrackingCode().isBlank()) {
+                order.setTrackingCode(req.getTrackingCode().trim());
+            }
+            return;
+        }
+        try {
+            long codAmount = 0;
+            if (order.getPaymentMethod() == Order.PaymentMethod.COD
+                    && order.getPaymentStatus() != Order.PaymentStatus.PAID) {
+                codAmount = order.getTotalAmount().longValue();
+            }
+            List<OrderDetail> orderDetailsList = orderDetailRepository.findByOrderId(order.getId());
+            String itemName =
+                    orderDetailsList.isEmpty()
+                            ? "Đơn hàng Bảo Khang Gadget"
+                            : orderDetailsList.get(0).getProductName();
+            int totalQty = orderDetailsList.stream().mapToInt(OrderDetail::getQuantity).sum();
+
+            GHNDto.CreateOrderResponse ghnResult =
+                    ghnService.createShippingOrder(
+                            order.getOrderCode(),
+                            order.getShippingName(),
+                            order.getShippingPhone(),
+                            order.getShippingAddress(),
+                            order.getToWardCode(),
+                            order.getToDistrictId(),
+                            codAmount,
+                            order.getTotalAmount().longValue(),
+                            itemName,
+                            totalQty);
+            order.setTrackingCode(ghnResult.getOrderCode());
+            order.setGhnOrderCode(ghnResult.getOrderCode());
+            log.info(
+                    "Admin GHN order {} created for {}",
+                    ghnResult.getOrderCode(),
+                    order.getOrderCode());
+        } catch (Exception e) {
+            log.warn(
+                    "GHN auto-create failed for order {}: {}",
+                    order.getOrderCode(),
+                    e.getMessage());
+            if (req.getTrackingCode() != null && !req.getTrackingCode().isBlank()) {
+                order.setTrackingCode(req.getTrackingCode().trim());
+            }
+        }
     }
 
     private void sendStatusEmail(Order order) {

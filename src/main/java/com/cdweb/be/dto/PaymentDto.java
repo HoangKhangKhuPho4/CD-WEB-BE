@@ -102,6 +102,19 @@ public class PaymentDto {
     private String message;
   }
 
+  @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
+  @Builder
+  public static class RefundResponse {
+    private boolean success;
+    private String orderCode;
+    private String message;
+    private String gatewayTransactionId;
+    private String refundTransactionRef;
+    private BigDecimal amount;
+  }
+
   /** Response cho payment transaction history */
   @Data
   @NoArgsConstructor

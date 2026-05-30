@@ -28,6 +28,27 @@ public class EmailService {
     }
 
     @Async
+    public void sendOrderConfirmationEmail(
+            String to,
+            String customerName,
+            String orderCode,
+            String totalAmountFormatted,
+            String paymentMethod) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setTo(to);
+            helper.setSubject("Xác nhận đơn hàng #" + orderCode + " – Bảo Khang Gadget");
+            helper.setText(
+                    buildOrderConfirmationHtml(customerName, orderCode, totalAmountFormatted, paymentMethod),
+                    true);
+            mailSender.send(message);
+        } catch (MessagingException e) {
+            System.err.println("Failed to send order confirmation email: " + e.getMessage());
+        }
+    }
+
+    @Async
     public void sendPasswordResetEmail(String to, String name, String resetLink) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -66,6 +87,24 @@ public class EmailService {
               <p style="color: #888; font-size: 12px;">Email này được gửi tự động, vui lòng không trả lời.</p>
             </div>
             """.formatted(name, orderId, color, color, statusLabel(status));
+    }
+
+    private String buildOrderConfirmationHtml(
+            String name, String orderCode, String totalAmount, String paymentMethod) {
+        return """
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
+              <h2 style="color: #3C50E0;">Bảo Khang Gadget – Đặt hàng thành công</h2>
+              <p>Xin chào <strong>%s</strong>,</p>
+              <p>Cảm ơn bạn đã đặt hàng. Đơn hàng <strong>#%s</strong> đã được tiếp nhận.</p>
+              <div style="background: #f5f5f5; padding: 16px; margin: 16px 0; border-radius: 4px;">
+                <p style="margin: 4px 0;"><strong>Tổng thanh toán:</strong> %s</p>
+                <p style="margin: 4px 0;"><strong>Phương thức:</strong> %s</p>
+              </div>
+              <p>Bạn có thể theo dõi đơn hàng trong mục <strong>Lịch sử đơn hàng</strong> trên website.</p>
+              <hr style="margin: 24px 0; border: none; border-top: 1px solid #eee;" />
+              <p style="color: #888; font-size: 12px;">Email này được gửi tự động, vui lòng không trả lời.</p>
+            </div>
+            """.formatted(name, orderCode, totalAmount, paymentMethod);
     }
 
     private String buildPasswordResetHtml(String name, String resetLink) {

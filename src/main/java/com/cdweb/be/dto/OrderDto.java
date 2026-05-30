@@ -126,6 +126,19 @@ public class OrderDto {
 
     // Sản phẩm
     private List<OrderItemResponse> items;
+
+    /** Lịch sử trạng thái đơn hàng (khách hàng & chi tiết đơn) */
+    private List<TimelineItem> timeline;
+  }
+
+  @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class TimelineItem {
+    private String status;
+    private String note;
+    private String changedBy;
+    private LocalDateTime createdAt;
   }
 
   // ─── Response: Tóm tắt đơn (dùng cho danh sách) ──────────────────────────
