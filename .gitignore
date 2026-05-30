@@ -10,6 +10,14 @@ buildNumber.properties
 .mvn/timing.properties
 .mvn/wrapper/maven-wrapper.jar
 
+# Local env & secrets
+.env
+.env.local
+
+# DB dump / build artifacts (local only)
+cd_web.sql
+compile_output.txt
+
 # IntelliJ IDEA
 .idea/
 *.iws
