@@ -10,4 +10,7 @@ import org.springframework.stereotype.Repository;
 public interface CmsContentRepository extends JpaRepository<CmsContent, Long> {
 
   List<CmsContent> findByContentTypeOrderBySortOrderAscCreatedAtDesc(CmsContentType contentType);
+
+  List<CmsContent> findByContentTypeAndActiveTrueOrderBySortOrderAscCreatedAtDesc(
+      CmsContentType contentType);
 }

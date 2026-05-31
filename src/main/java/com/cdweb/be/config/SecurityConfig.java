@@ -100,6 +100,8 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/settings/general")
                     .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/cms/**")
+                    .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/reviews/*/helpful")
                     .permitAll()
 

@@ -95,6 +95,8 @@ public class OrderDto {
     private String shippingDistrict;
     private String shippingWard;
     private BigDecimal shippingFee;
+    private String trackingCode;
+    private String ghnOrderCode;
 
     // Thanh toán & trạng thái
     private String paymentMethod;

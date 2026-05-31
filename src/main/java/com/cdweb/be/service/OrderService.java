@@ -1192,6 +1192,8 @@ public class OrderService {
     r.setShippingDistrict(order.getShippingDistrict());
     r.setShippingWard(order.getShippingWard());
     r.setShippingFee(order.getShippingFee());
+    r.setTrackingCode(order.getTrackingCode());
+    r.setGhnOrderCode(order.getGhnOrderCode());
     r.setPaymentMethod(order.getPaymentMethod().name());
     r.setPaymentStatus(order.getPaymentStatus().name());
     r.setStatus(order.getStatus().name());
