@@ -85,6 +85,9 @@ public class VNPayService {
       String paymentUrl =
           vnpayConfig.getPayUrl() + "?" + queryString + "&vnp_SecureHash=" + secureHash;
 
+      System.out.println("=== MÃ TMN CODE TRONG JAVA ĐANG CÓ LÀ: [" + vnpayConfig.getTmnCode() + "]");
+      System.out.println("=== LINK VNPAY ĐƯỢC TẠO RA: " + paymentUrl);
+
       log.info(
           "VNPay payment URL created for order: {}, txnRef: {}",
           order.getOrderCode(),

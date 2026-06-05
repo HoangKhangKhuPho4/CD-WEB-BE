@@ -5,7 +5,7 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3306/cd_web
     username: root
-    password:
+    password: "12345"
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -27,8 +27,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: ${MAIL_USERNAME:your-email@gmail.com}
-    password: ${MAIL_PASSWORD:your-app-password}
+    username: ${MAIL_USERNAME:phamthaibao57@gmail.com}
+    password: ${MAIL_PASSWORD:ggkk msle usqo eaxt}
     default-encoding: UTF-8
     properties:
       mail:
@@ -57,32 +57,53 @@ google:
   client:
     id: 573198951854-46toem8hgic9va247hthtaem89f3alr7.apps.googleusercontent.com
 
+# ── App Settings (ĐỔI LINK NGROK Ở DUY NHẤT CHỖ NÀY) ──
+app:
+  frontend-url: "http://localhost:3000"
+  backend-url: "https://oxygenizable-beamiest-julianna.ngrok-free.dev" # <--- CHỈ CẦN THAY NGROK MỚI Ở DÒNG NÀY
+  server:
+    url: "${app.backend-url}"
+  ai:
+    base-url: "http://localhost:5000"
+  password-reset-expiry: 3600000
+  password-reset:
+    frontend-url: "http://localhost:3000/reset-password"
+    expiration-minutes: 60
+
 # ── VNPAY (F5 - Thanh toán) ──
 vnpay:
-  tmnCode: ${VNPAY_TMN_CODE:B4JPTDZH}
-  hashSecret: ${VNPAY_HASH_SECRET:JLWFEXD3QGN4QOOW2W1I9XZITI6C3V8D}
-  payUrl: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
-  returnUrl: ${APP_BACKEND_URL:http://localhost:8080}/api/payment/vnpay/return
+  tmn-code: "B4JPTDZH"
+  hash-secret: "JLWFEXD3QGN4QOOW2W1I9XZITI6C3V8D"
+  pay-url: "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"
+  return-url: "${app.backend-url}/api/payment/vnpay/return"
+  version: "2.1.0"
+  command: "pay"
+  curr-code: "VND"
+  locale: "vn"
+  order-type: "other"
+
+# ── MoMo Sandbox (F5 - Thanh toán) ──
+momo:
+  partnerCode: "MOMO"
+  accessKey: "F8BBA842ECF85"
+  secretKey: "K951B6PE1waDMi640xX08PD3vg6EkVlz"
+  endpoint: "https://test-payment.momo.vn/v2/gateway/api/create"
+  returnUrl: "${app.backend-url}/api/payment/momo/return"
+  ipnUrl: "${app.backend-url}/api/payment/momo/ipn"
+
+# ── ZaloPay Sandbox (F5 - Thanh toán) ──
+zalopay:
+  appId: "554"
+  key1: "9phuAOYHG2m5Q99TsNAw39wUP6yd7d9v"
+  key2: "Iajsuvsnvlsiorhih123llvskepjsidj"
+  endpoint: "https://sb-openapi.zalopay.vn/v2/create"
+  redirectUrl: "${app.frontend-url}/checkout/result"
 
 # ── GHN (F5 - Giao hàng nhanh) ──
 ghn:
-  token: ${GHN_TOKEN:57fb4bcb-2ed0-11f0-9058-46b90fbc47f5}
-  shopId: ${GHN_SHOP_ID:5772189}
-  baseUrl: https://dev-online-gateway.ghn.vn/shiip/public-api  # Dùng môi trường dev
-
-# ── App Settings (Gộp cả cũ và mới để tránh lỗi code) ──
-app:
-  frontend-url: ${APP_FRONTEND_URL:http://localhost:3000}
-  backend-url: ${APP_BACKEND_URL:http://localhost:8080}
-  server:
-    url: ${APP_BACKEND_URL:http://localhost:8080}
-  ai:
-    base-url: ${AI_SERVICE_BASE_URL:http://localhost:5000}
-  password-reset-expiry: 3600000  # Dùng cho code mới (ms)
-  password-reset:
-    frontend-url: ${APP_FRONTEND_URL:http://localhost:3000}/reset-password
-    expiration-minutes: 60 # Dùng cho code cũ
-
+  token: "57fb4bcb-2ed0-11f0-9058-46b90fbc47f5"
+  shopId: "5772189"
+  baseUrl: "https://online-gateway.ghn.vn"
 # ── Spring Boot Actuator (Từ bản cũ) ──
 management:
   endpoints:

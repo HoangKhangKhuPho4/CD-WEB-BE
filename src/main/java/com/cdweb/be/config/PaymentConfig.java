@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Configuration;
 
 /** Cấu hình cho các Payment Gateway. Đọc từ application.properties với prefix "payment" */
 @Configuration
-@ConfigurationProperties(prefix = "payment")
+@ConfigurationProperties
 @Data
 public class PaymentConfig {
 

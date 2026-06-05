@@ -71,6 +71,7 @@ public class GhnService {
    */
   public List<GHNDto.ProvinceResponse> getProvinces() {
     String url = ghnConfig.getBaseUrl() + PROVINCE_API;
+    System.out.println("=== ĐƯỜNG LINK GHN THỰC TẾ ĐANG GỌI: " + url + " ===");
     try {
       HttpHeaders headers = buildHeaders();
       ResponseEntity<JsonNode> response =
