@@ -33,6 +33,11 @@ public class QrDto {
         private String status;     // PENDING | SCANNED | CONFIRMED | EXPIRED
         private String jwtToken;   // Trả về khi status = CONFIRMED (login QR)
         private UserDto.Response user;
+        /** QR_LOGIN | QR_ORDER_CONFIRMATION */
+        private String qrType;
+        private Integer orderId;
+        private String orderCode;
+        private String orderStatus;
     }
 
     @Data

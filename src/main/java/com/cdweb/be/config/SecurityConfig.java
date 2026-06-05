@@ -68,7 +68,14 @@ public class SecurityConfig {
                         "/img/**",
                         "/api/auth/**",
                         "/api/public/**",
+                        "/api/qr/generate",
+                        "/api/qr/status/**",
                         "/api/shipping/**", // GHN Proxy — địa chỉ & phí vận chuyển (PUBLIC)
+                        "/api/ghn/provinces",
+                        "/api/ghn/districts",
+                        "/api/ghn/wards",
+                        "/api/ghn/calculate-fee",
+                        "/api/ghn/checkout",
                         "/swagger-ui/**",
                         "/v3/api-docs/**",
                         "/api-docs",
@@ -89,7 +96,11 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/reviews/summary")
                     .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/reviews/recent")
+                    .permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/settings/general")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/cms/**")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/reviews/*/helpful")
                     .permitAll()

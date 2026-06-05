@@ -71,6 +71,7 @@ public class GhnService {
    */
   public List<GHNDto.ProvinceResponse> getProvinces() {
     String url = ghnConfig.getBaseUrl() + PROVINCE_API;
+    System.out.println("=== ĐƯỜNG LINK GHN THỰC TẾ ĐANG GỌI: " + url + " ===");
     try {
       HttpHeaders headers = buildHeaders();
       ResponseEntity<JsonNode> response =
@@ -977,6 +978,51 @@ public class GhnService {
       result.setStatus("error");
       result.setStatusDisplay("Lỗi khi tra cứu vận đơn");
       return result;
+    }
+  }
+
+  private static final String GEN_PRINT_TOKEN_API = "/shiip/public-api/v2/a5/gen-token";
+  private static final String PRINT_A5_PATH = "/shiip/public-api/v2/print/A5";
+
+  /**
+   * Lấy token in nhãn vận đơn GHN (khổ A5). Mở {@link GHNDto.PrintLabelResponse#printUrl} trên trình
+   * duyệt để in.
+   */
+  public GHNDto.PrintLabelResponse generatePrintLabel(String ghnOrderCode) {
+    if (ghnOrderCode == null || ghnOrderCode.isBlank()) {
+      throw new RuntimeException("Thiếu mã vận đơn GHN");
+    }
+
+    String url = ghnConfig.getBaseUrl() + GEN_PRINT_TOKEN_API;
+    GHNDto.PrintLabelResponse result = new GHNDto.PrintLabelResponse();
+    result.setGhnOrderCode(ghnOrderCode);
+
+    try {
+      Map<String, Object> body = new HashMap<>();
+      body.put("order_codes", List.of(ghnOrderCode));
+
+      HttpHeaders headers = buildShopHeaders();
+      ResponseEntity<JsonNode> response =
+          restTemplate.exchange(
+              url, HttpMethod.POST, new HttpEntity<>(body, headers), JsonNode.class);
+
+      JsonNode root = response.getBody();
+      if (root == null || root.get("code").asInt() != 200) {
+        String msg =
+            root != null && root.has("message")
+                ? root.get("message").asText()
+                : "GHN gen-token thất bại";
+        throw new RuntimeException(msg);
+      }
+
+      String token = root.get("data").get("token").asText();
+      result.setToken(token);
+      result.setPrintUrl(ghnConfig.getBaseUrl() + PRINT_A5_PATH + "?token=" + token);
+      log.info("GHN print token generated for {}", ghnOrderCode);
+      return result;
+    } catch (RestClientException e) {
+      log.error("GHN generatePrintLabel error: {}", e.getMessage());
+      throw new RuntimeException("Lỗi kết nối GHN khi tạo nhãn in: " + e.getMessage(), e);
     }
   }
 

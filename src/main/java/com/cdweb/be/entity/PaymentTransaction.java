@@ -94,6 +94,7 @@ public class PaymentTransaction {
     SUCCESS, // thanh toán thành công
     FAILED, // thanh toán thất bại
     CANCELLED, // user hủy thanh toán
-    EXPIRED // hết hạn thanh toán
+    EXPIRED, // hết hạn thanh toán
+    REFUNDED // đã hoàn tiền qua gateway
   }
 }

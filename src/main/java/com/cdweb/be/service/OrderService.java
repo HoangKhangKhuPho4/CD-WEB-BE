@@ -55,6 +55,12 @@ public class OrderService {
 
   @Autowired private UserInteractionRepository userInteractionRepository;
 
+  @Autowired private OrderStatusHistoryRepository orderStatusHistoryRepository;
+
+  @Autowired private EmailService emailService;
+
+  @Autowired private CartService cartService;
+
   @Value("${app.server.url:http://localhost:8080}")
   private String serverUrl;
 
@@ -294,7 +300,24 @@ public class OrderService {
       log.error("Lỗi khi lưu UserInteraction tracker cho đơn hàng: {}", e.getMessage());
     }
 
-    // 15. Nếu thanh toán online → tạo Payment URL qua Payment Gateway
+    // 15. Lịch sử trạng thái ban đầu + email xác nhận đặt hàng
+    saveOrderHistory(savedOrder, Order.OrderStatus.PENDING, "Đặt hàng thành công", user);
+    try {
+      if (user.getEmail() != null && !user.getEmail().isBlank()) {
+        String totalFormatted =
+            savedOrder.getTotalAmount().toPlainString() + " VNĐ";
+        emailService.sendOrderConfirmationEmail(
+            user.getEmail(),
+            user.getFullName() != null ? user.getFullName() : user.getUsername(),
+            savedOrder.getOrderCode(),
+            totalFormatted,
+            paymentMethod.name());
+      }
+    } catch (Exception e) {
+      log.warn("Gửi email xác nhận đơn {} thất bại: {}", savedOrder.getOrderCode(), e.getMessage());
+    }
+
+    // 16. Nếu thanh toán online → tạo Payment URL qua Payment Gateway
     if (paymentMethod == Order.PaymentMethod.VNPAY
         || paymentMethod == Order.PaymentMethod.MOMO
         || paymentMethod == Order.PaymentMethod.ZALOPAY) {
@@ -438,6 +461,48 @@ public class OrderService {
 
     List<OrderDetail> details = orderDetailRepository.findByOrderId(order.getId());
     return mapToOrderResponse(order, details);
+  }
+
+  /** Thêm lại toàn bộ sản phẩm của đơn vào giỏ hàng. */
+  public com.cdweb.be.dto.CartDto.CartResponse reorder(String username, String orderCode) {
+    User user = findUser(username);
+    Order order =
+        orderRepository
+            .findByOrderCode(orderCode)
+            .orElseThrow(() -> new ResourceNotFoundException("Order", "orderCode", orderCode));
+    if (!order.getUser().getId().equals(user.getId())) {
+      throw new ResourceNotFoundException("Order", "orderCode", orderCode);
+    }
+
+    List<OrderDetail> details = orderDetailRepository.findByOrderId(order.getId());
+    if (details.isEmpty()) {
+      throw new BadRequestException("Đơn hàng không có sản phẩm để đặt lại");
+    }
+
+    for (OrderDetail d : details) {
+      if (d.getVariant() == null) {
+        continue;
+      }
+      com.cdweb.be.dto.CartDto.AddItemRequest req = new com.cdweb.be.dto.CartDto.AddItemRequest();
+      req.setVariantId(d.getVariant().getId());
+      req.setQuantity(d.getQuantity());
+      cartService.addItem(username, req);
+    }
+
+    return cartService.getCart(username);
+  }
+
+  /** In nhãn vận đơn GHN (admin). */
+  @Transactional(readOnly = true)
+  public com.cdweb.be.dto.GHNDto.PrintLabelResponse getGhnPrintLabel(Integer orderId) {
+    Order order =
+        orderRepository
+            .findById(orderId)
+            .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
+    if (order.getGhnOrderCode() == null || order.getGhnOrderCode().isBlank()) {
+      throw new BadRequestException("Đơn chưa có mã vận đơn GHN");
+    }
+    return ghnService.generatePrintLabel(order.getGhnOrderCode());
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1127,6 +1192,8 @@ public class OrderService {
     r.setShippingDistrict(order.getShippingDistrict());
     r.setShippingWard(order.getShippingWard());
     r.setShippingFee(order.getShippingFee());
+    r.setTrackingCode(order.getTrackingCode());
+    r.setGhnOrderCode(order.getGhnOrderCode());
     r.setPaymentMethod(order.getPaymentMethod().name());
     r.setPaymentStatus(order.getPaymentStatus().name());
     r.setStatus(order.getStatus().name());
@@ -1163,7 +1230,40 @@ public class OrderService {
       }
     }
     r.setItems(itemResponses);
+
+    List<OrderStatusHistory> histories =
+        orderStatusHistoryRepository.findByOrderIdOrderByCreatedAtAsc(order.getId());
+    if (histories.isEmpty()) {
+      OrderDto.TimelineItem initial = new OrderDto.TimelineItem();
+      initial.setStatus(order.getStatus().name());
+      initial.setNote("Đặt hàng");
+      initial.setChangedBy("Hệ thống");
+      initial.setCreatedAt(order.getOrderDate());
+      r.setTimeline(List.of(initial));
+    } else {
+      r.setTimeline(
+          histories.stream()
+              .map(
+                  h ->
+                      new OrderDto.TimelineItem(
+                          h.getToStatus(),
+                          h.getNote(),
+                          h.getChangedBy() != null ? h.getChangedBy().getFullName() : "Hệ thống",
+                          h.getCreatedAt()))
+              .collect(Collectors.toList()));
+    }
+
     return r;
+  }
+
+  private void saveOrderHistory(Order order, Order.OrderStatus status, String note, User user) {
+    OrderStatusHistory h = new OrderStatusHistory();
+    h.setOrder(order);
+    h.setFromStatus(order.getStatus() != null ? order.getStatus().name() : null);
+    h.setToStatus(status.name());
+    h.setNote(note);
+    h.setChangedBy(user);
+    orderStatusHistoryRepository.save(h);
   }
 
   // ─── map Order → summary (danh sách) ─────────────────────────────────────

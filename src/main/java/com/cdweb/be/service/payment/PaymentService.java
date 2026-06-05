@@ -255,6 +255,80 @@ public class PaymentService {
         .build();
   }
 
+  /**
+   * Admin hoàn tiền VNPay cho đơn đã thanh toán online. Cập nhật trạng thái đơn REFUNDED khi gateway
+   * trả về thành công.
+   */
+  public PaymentDto.RefundResponse refundOrderVnpay(Integer orderId, String adminUsername) {
+    Order order =
+        orderRepository
+            .findById(orderId)
+            .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
+
+    if (order.getPaymentMethod() != Order.PaymentMethod.VNPAY) {
+      throw new BadRequestException("Đơn không thanh toán VNPay");
+    }
+    if (order.getPaymentStatus() != Order.PaymentStatus.PAID) {
+      throw new BadRequestException("Đơn chưa thanh toán hoặc đã hoàn tiền");
+    }
+
+    PaymentTransaction paidTxn =
+        transactionRepository.findByOrderCodeOrderByCreatedAtDesc(order.getOrderCode()).stream()
+            .filter(t -> t.getStatus() == PaymentTransaction.TransactionStatus.SUCCESS)
+            .findFirst()
+            .orElseThrow(() -> new BadRequestException("Không tìm thấy giao dịch VNPay thành công"));
+
+    if (paidTxn.getGatewayTransactionId() == null
+        || paidTxn.getGatewayTransactionId().isBlank()) {
+      throw new BadRequestException("Thiếu mã giao dịch VNPay (TransactionNo)");
+    }
+
+    PaymentDto.RefundResponse result =
+        vnPayService.refundTransaction(
+            paidTxn.getTransactionRef(),
+            paidTxn.getGatewayTransactionId(),
+            order.getTotalAmount(),
+            paidTxn.getCreatedAt(),
+            adminUsername,
+            paidTxn.getIpAddress());
+
+    result.setOrderCode(order.getOrderCode());
+
+    if (!result.isSuccess()) {
+      return result;
+    }
+
+    paidTxn.setStatus(PaymentTransaction.TransactionStatus.REFUNDED);
+    paidTxn.setResponseMessage(result.getMessage());
+    transactionRepository.save(paidTxn);
+
+    PaymentTransaction refundTxn =
+        PaymentTransaction.builder()
+            .order(order)
+            .orderCode(order.getOrderCode())
+            .transactionRef(
+                result.getRefundTransactionRef() != null
+                    ? result.getRefundTransactionRef()
+                    : "REFUND_" + order.getOrderCode())
+            .gatewayTransactionId(result.getGatewayTransactionId())
+            .paymentMethod(Order.PaymentMethod.VNPAY)
+            .status(PaymentTransaction.TransactionStatus.REFUNDED)
+            .amount(order.getTotalAmount())
+            .responseMessage(result.getMessage())
+            .build();
+    transactionRepository.save(refundTxn);
+
+    order.setPaymentStatus(Order.PaymentStatus.REFUNDED);
+    if (order.getStatus() != Order.OrderStatus.CANCELLED
+        && order.getStatus() != Order.OrderStatus.REFUNDED) {
+      order.setStatus(Order.OrderStatus.REFUNDED);
+    }
+    orderRepository.save(order);
+
+    log.info("Order {} refunded via VNPay by {}", order.getOrderCode(), adminUsername);
+    return result;
+  }
+
   /** Lịch sử giao dịch thanh toán của đơn hàng */
   @Transactional(readOnly = true)
   public List<PaymentDto.PaymentTransactionResponse> getTransactionHistory(

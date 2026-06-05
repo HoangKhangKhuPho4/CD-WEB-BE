@@ -1,6 +1,8 @@
 package com.cdweb.be.dto;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * DTO cho GHN (Giao Hàng Nhanh) Shipping API.
@@ -256,6 +258,17 @@ public class GHNDto {
   // ═══════════════════════════════════════════════════════════════════════════
   // TRACKING — Tra cứu trạng thái vận đơn GHN
   // ═══════════════════════════════════════════════════════════════════════════
+
+  @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class PrintLabelResponse {
+    /** Token in nhãn GHN (A5) */
+    private String token;
+    /** URL mở tab in nhãn */
+    private String printUrl;
+    private String ghnOrderCode;
+  }
 
   @Data
   public static class TrackingResponse {
