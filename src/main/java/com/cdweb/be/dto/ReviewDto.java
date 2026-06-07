@@ -93,6 +93,7 @@ public class ReviewDto {
     private String productName;
     private Integer variantId;
     private String variantName;
+    private Integer orderId;
     private Integer rating;
     private String title;
     private String content;
@@ -129,4 +130,59 @@ public class ReviewDto {
     private String username;
     private String name;
   }
+
+  // ─── Response: Kiểm tra quyền đánh giá ───────────────────────────────────
+  @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class EligibilityResponse {
+    private Integer productId;
+    private Boolean canReview;
+    private Boolean alreadyReviewed;
+    private Integer existingReviewId;
+    private Boolean isVerifiedEligible;
+    private Integer eligibleOrderId;
+    private Integer eligibleVariantId;
+    private String reason;
+  }
+
+  // ─── Response: Sản phẩm chờ đánh giá (từ đơn đã giao) ────────────────────
+  @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class ReviewableItem {
+    private Integer orderId;
+    private Integer productId;
+    private String productName;
+    private Integer variantId;
+    private String variantName;
+    private String imageUrl;
+    private LocalDateTime deliveredAt;
+  }
+
+  // ─── Response: Thống kê admin ────────────────────────────────────────────
+  @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class AdminStatsResponse {
+    private Long total;
+    private Long pending;
+    private Long approved;
+    private Long hidden;
+    private Long verifiedCount;
+    private Long unrepliedCount;
+    private Double averageRating;
+    private Map<Integer, Integer> ratingDistribution;
+  }
+
+  // ─── Request: Duyệt/ẩn hàng loạt ───────────────────────────────────────
+  @Data
+  public static class BulkStatusRequest {
+    @NotNull(message = "Danh sách ID không được trống")
+    private java.util.List<Integer> ids;
+
+    @NotNull(message = "Trạng thái duyệt không được trống")
+    private Boolean isApproved;
+  }
 }
+

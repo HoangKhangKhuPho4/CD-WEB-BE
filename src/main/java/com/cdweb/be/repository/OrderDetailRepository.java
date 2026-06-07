@@ -34,6 +34,21 @@ public interface OrderDetailRepository extends JpaRepository<OrderDetail, Intege
           List<com.cdweb.be.entity.Order.OrderStatus> statuses,
       Pageable pageable);
 
+  @Query(
+      "SELECT od.variant.product.id, od.productName, od.variantName, "
+          + "SUM(od.quantity), SUM(od.totalPrice), od.variant.stockQuantity, od.variant.product.productType.name, "
+          + "(SELECT MAX(i.imageUrl) FROM Image i WHERE i.product.id = od.variant.product.id) "
+          + "FROM OrderDetail od JOIN od.order o "
+          + "WHERE o.status IN :statuses AND o.orderDate BETWEEN :start AND :end "
+          + "GROUP BY od.variant.product.id, od.productName, od.variantName, od.variant.stockQuantity, od.variant.product.productType.name "
+          + "ORDER BY SUM(od.quantity) DESC")
+  List<Object[]> findTopSellingProductsByDateRange(
+      @org.springframework.data.repository.query.Param("statuses")
+          List<com.cdweb.be.entity.Order.OrderStatus> statuses,
+      @org.springframework.data.repository.query.Param("start") java.time.LocalDateTime start,
+      @org.springframework.data.repository.query.Param("end") java.time.LocalDateTime end,
+      Pageable pageable);
+
   /** Tổng số sản phẩm đã bán (quantity) — cho Overview KPI */
   @Query(
       "SELECT COALESCE(SUM(od.quantity), 0) FROM OrderDetail od JOIN od.order o "
@@ -41,6 +56,15 @@ public interface OrderDetailRepository extends JpaRepository<OrderDetail, Intege
   Long sumTotalProductsSold(
       @org.springframework.data.repository.query.Param("statuses")
           List<com.cdweb.be.entity.Order.OrderStatus> statuses);
+
+  @Query(
+      "SELECT COALESCE(SUM(od.quantity), 0) FROM OrderDetail od JOIN od.order o "
+          + "WHERE o.status IN :statuses AND o.orderDate BETWEEN :start AND :end")
+  Long sumTotalProductsSoldByDateRange(
+      @org.springframework.data.repository.query.Param("statuses")
+          List<com.cdweb.be.entity.Order.OrderStatus> statuses,
+      @org.springframework.data.repository.query.Param("start") java.time.LocalDateTime start,
+      @org.springframework.data.repository.query.Param("end") java.time.LocalDateTime end);
 
   /** Đếm tổng số lượng đã bán của 1 sản phẩm cụ thể (cho User Card) */
   @Query(

@@ -6,7 +6,6 @@ import com.cdweb.be.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -17,29 +16,24 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+/** Admin API — Quản lý Sản phẩm (đủ scenario kiểm thử). */
 @RestController
 @RequestMapping("/api/admin/products")
 @PreAuthorize("hasAnyAuthority('PRODUCT_MANAGE', 'PRODUCT_CREATE', 'PRODUCT_UPDATE', 'ROLE_ADMIN')")
-@Tag(name = "Quản trị Sản phẩm (Admin Product)", description = "Các API dành cho Admin quản lý kho hàng, variant và hình ảnh")
+@Tag(name = "Quản trị Sản phẩm (Admin Product)", description = "API quản lý sản phẩm, variant, hình ảnh")
+@CrossOrigin(origins = "*")
 public class AdminProductController {
 
   @Autowired private ProductService productService;
 
-  // ═══════════════════════════════════════════════════════════════════
-  // ██  CRUD Sản phẩm
-  // ═══════════════════════════════════════════════════════════════════
-
-  /**
-   * GET /api/admin/products Lấy danh sách sản phẩm (bao gồm cả inactive) — hỗ trợ tìm kiếm, lọc,
-   * phân trang, sắp xếp.
-   */
   @GetMapping
-  @Operation(summary = "Danh sách sản phẩm (Admin)", description = "Lấy tất cả sản phẩm, hỗ trợ tìm kiếm, lọc và phân trang nâng cao")
+  @Operation(summary = "Danh sách sản phẩm (Admin)")
   public ResponseEntity<ApiResponse<Page<ProductDto.AdminProductListResponse>>> getAllProducts(
       @RequestParam(value = "page", defaultValue = "0") int page,
       @RequestParam(value = "size", defaultValue = "10") int size,
       @RequestParam(value = "keyword", required = false) String keyword,
       @RequestParam(value = "isActive", required = false) Boolean isActive,
+      @RequestParam(value = "isFeatured", required = false) Boolean isFeatured,
       @RequestParam(value = "productTypeId", required = false) Integer productTypeId,
       @RequestParam(value = "producerId", required = false) Integer producerId,
       @RequestParam(value = "sortBy", defaultValue = "createdAt") String sortBy,
@@ -52,26 +46,47 @@ public class AdminProductController {
     Pageable pageable = PageRequest.of(page, size, sort);
 
     Page<ProductDto.AdminProductListResponse> products =
-        productService.adminGetAllProducts(keyword, isActive, productTypeId, producerId, pageable);
+        productService.adminGetAllProducts(
+            keyword, isActive, productTypeId, producerId, isFeatured, pageable);
     return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm thành công", products));
   }
 
-  /**
-   * GET /api/admin/products/{id} Lấy chi tiết sản phẩm (bao gồm variants, images, specifications).
-   */
-  @GetMapping("/{id}")
-  public ResponseEntity<ApiResponse<ProductDto.AdminProductResponse>> getProductById(
-      @PathVariable("id") Integer id) {
-    ProductDto.AdminProductResponse product = productService.adminGetProductById(id);
-    return ResponseEntity.ok(ApiResponse.success("Chi tiết sản phẩm", product));
+  @GetMapping("/stats")
+  public ResponseEntity<ApiResponse<ProductDto.AdminStatsResponse>> getProductStats() {
+    return ResponseEntity.ok(
+        ApiResponse.success("Thống kê sản phẩm", productService.adminGetProductStats()));
   }
 
-  /**
-   * POST /api/admin/products Tạo sản phẩm mới — hỗ trợ tạo kèm variants, images, specifications
-   * trong 1 request.
-   */
+  @PostMapping("/validate-sku")
+  public ResponseEntity<ApiResponse<ProductDto.ValidateSkuResponse>> validateSku(
+      @Valid @RequestBody ProductDto.ValidateSkuRequest request) {
+    return ResponseEntity.ok(
+        ApiResponse.success("Kiểm tra SKU", productService.validateSku(request)));
+  }
+
+  @PatchMapping("/bulk-status")
+  public ResponseEntity<ApiResponse<ProductDto.BulkStatusResult>> bulkStatus(
+      @Valid @RequestBody ProductDto.BulkStatusRequest request) {
+    return ResponseEntity.ok(
+        ApiResponse.success("Cập nhật hàng loạt", productService.adminBulkStatus(request)));
+  }
+
+  @GetMapping("/slug/{slug}")
+  public ResponseEntity<ApiResponse<ProductDto.AdminProductResponse>> getBySlug(
+      @PathVariable String slug) {
+    return ResponseEntity.ok(
+        ApiResponse.success("Chi tiết sản phẩm theo slug", productService.adminGetProductBySlug(slug)));
+  }
+
+  @GetMapping("/{id:\\d+}")
+  public ResponseEntity<ApiResponse<ProductDto.AdminProductResponse>> getProductById(
+      @PathVariable Integer id) {
+    return ResponseEntity.ok(
+        ApiResponse.success("Chi tiết sản phẩm", productService.adminGetProductById(id)));
+  }
+
   @PostMapping
-  @Operation(summary = "Tạo mới sản phẩm", description = "Tạo sản phẩm kèm theo các biến thể và hình ảnh trong một lần gọi")
+  @Operation(summary = "Tạo mới sản phẩm")
   public ResponseEntity<ApiResponse<ProductDto.AdminProductResponse>> createProduct(
       @Valid @RequestBody ProductDto.AdminCreateRequest request) {
     ProductDto.AdminProductResponse product = productService.adminCreateProduct(request);
@@ -79,97 +94,83 @@ public class AdminProductController {
         .body(ApiResponse.success("Tạo sản phẩm thành công", product));
   }
 
-  /**
-   * PUT /api/admin/products/{id} Cập nhật thông tin sản phẩm (partial update — chỉ cập nhật các
-   * trường được gửi lên).
-   */
-  @PutMapping("/{id}")
+  @PutMapping("/{id:\\d+}")
   public ResponseEntity<ApiResponse<ProductDto.AdminProductResponse>> updateProduct(
-      @PathVariable("id") Integer id, @Valid @RequestBody ProductDto.AdminUpdateRequest request) {
-    ProductDto.AdminProductResponse product = productService.adminUpdateProduct(id, request);
-    return ResponseEntity.ok(ApiResponse.success("Cập nhật sản phẩm thành công", product));
+      @PathVariable Integer id, @Valid @RequestBody ProductDto.AdminUpdateRequest request) {
+    return ResponseEntity.ok(
+        ApiResponse.success("Cập nhật sản phẩm thành công", productService.adminUpdateProduct(id, request)));
   }
 
-  /** DELETE /api/admin/products/{id} Xoá sản phẩm (soft delete — chuyển trạng thái inactive). */
-  @DeleteMapping("/{id}")
-  public ResponseEntity<ApiResponse<Void>> deleteProduct(@PathVariable("id") Integer id) {
+  @DeleteMapping("/{id:\\d+}")
+  public ResponseEntity<ApiResponse<Void>> deleteProduct(@PathVariable Integer id) {
     productService.adminDeleteProduct(id);
     return ResponseEntity.ok(ApiResponse.success("Xoá sản phẩm thành công", null));
   }
 
-  /** PUT /api/admin/products/{id}/toggle-status Bật/tắt trạng thái hoạt động của sản phẩm. */
-  @PutMapping("/{id}/toggle-status")
+  @PutMapping("/{id:\\d+}/toggle-status")
   public ResponseEntity<ApiResponse<ProductDto.AdminProductResponse>> toggleStatus(
-      @PathVariable("id") Integer id) {
-    ProductDto.AdminProductResponse product = productService.adminToggleStatus(id);
-    return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái thành công", product));
+      @PathVariable Integer id) {
+    return ResponseEntity.ok(
+        ApiResponse.success("Cập nhật trạng thái thành công", productService.adminToggleStatus(id)));
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // ██  Quản lý Variant
-  // ═══════════════════════════════════════════════════════════════════
+  @PatchMapping("/{id:\\d+}/featured")
+  public ResponseEntity<ApiResponse<ProductDto.AdminProductResponse>> setFeatured(
+      @PathVariable Integer id, @Valid @RequestBody ProductDto.FeaturedRequest request) {
+    return ResponseEntity.ok(
+        ApiResponse.success("Cập nhật nổi bật", productService.adminSetFeatured(id, request)));
+  }
 
-  /** POST /api/admin/products/{id}/variants Thêm variant mới cho sản phẩm. */
-  @PostMapping("/{id}/variants")
+  @PostMapping("/{id:\\d+}/variants")
   public ResponseEntity<ApiResponse<ProductDto.AdminProductResponse>> addVariant(
-      @PathVariable("id") Integer id, @Valid @RequestBody ProductDto.AdminVariantRequest request) {
-    ProductDto.AdminProductResponse product = productService.adminAddVariant(id, request);
+      @PathVariable Integer id, @Valid @RequestBody ProductDto.AdminVariantRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(ApiResponse.success("Thêm variant thành công", product));
+        .body(ApiResponse.success("Thêm variant thành công", productService.adminAddVariant(id, request)));
   }
 
-  /** PUT /api/admin/products/{productId}/variants/{variantId} Cập nhật variant của sản phẩm. */
-  @PutMapping("/{productId}/variants/{variantId}")
+  @PutMapping("/{productId:\\d+}/variants/{variantId:\\d+}")
   public ResponseEntity<ApiResponse<ProductDto.AdminProductResponse>> updateVariant(
-      @PathVariable("productId") Integer productId,
-      @PathVariable("variantId") Integer variantId,
+      @PathVariable Integer productId,
+      @PathVariable Integer variantId,
       @Valid @RequestBody ProductDto.AdminVariantRequest request) {
-    ProductDto.AdminProductResponse product =
-        productService.adminUpdateVariant(productId, variantId, request);
-    return ResponseEntity.ok(ApiResponse.success("Cập nhật variant thành công", product));
+    return ResponseEntity.ok(
+        ApiResponse.success(
+            "Cập nhật variant thành công",
+            productService.adminUpdateVariant(productId, variantId, request)));
   }
 
-  /**
-   * DELETE /api/admin/products/{productId}/variants/{variantId} Vô hiệu hóa variant của sản phẩm
-   * (Soft Delete — bảo toàn lịch sử đơn hàng).
-   */
-  @DeleteMapping("/{productId}/variants/{variantId}")
+  @PutMapping("/{productId:\\d+}/variants/{variantId:\\d+}/stock")
+  public ResponseEntity<ApiResponse<ProductDto.AdminProductResponse>> setVariantStock(
+      @PathVariable Integer productId,
+      @PathVariable Integer variantId,
+      @Valid @RequestBody ProductDto.VariantStockRequest request) {
+    return ResponseEntity.ok(
+        ApiResponse.success(
+            "Cập nhật tồn kho variant",
+            productService.adminSetVariantStock(productId, variantId, request)));
+  }
+
+  @DeleteMapping("/{productId:\\d+}/variants/{variantId:\\d+}")
   public ResponseEntity<ApiResponse<ProductDto.AdminProductResponse>> deleteVariant(
-      @PathVariable("productId") Integer productId, @PathVariable("variantId") Integer variantId) {
-    ProductDto.AdminProductResponse product =
-        productService.adminDeleteVariant(productId, variantId);
-    return ResponseEntity.ok(ApiResponse.success("Vô hiệu hóa variant thành công", product));
+      @PathVariable Integer productId, @PathVariable Integer variantId) {
+    return ResponseEntity.ok(
+        ApiResponse.success(
+            "Vô hiệu hóa variant thành công",
+            productService.adminDeleteVariant(productId, variantId)));
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // ██  Quản lý Hình ảnh
-  // ═══════════════════════════════════════════════════════════════════
-
-  /** POST /api/admin/products/{id}/images Thêm hình ảnh cho sản phẩm. */
-  @PostMapping("/{id}/images")
+  @PostMapping("/{id:\\d+}/images")
   public ResponseEntity<ApiResponse<ProductDto.AdminProductResponse>> addImage(
-      @PathVariable("id") Integer id, @Valid @RequestBody ProductDto.AdminImageRequest request) {
-    ProductDto.AdminProductResponse product = productService.adminAddImage(id, request);
+      @PathVariable Integer id, @Valid @RequestBody ProductDto.AdminImageRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(ApiResponse.success("Thêm hình ảnh thành công", product));
+        .body(ApiResponse.success("Thêm hình ảnh thành công", productService.adminAddImage(id, request)));
   }
 
-  /** DELETE /api/admin/products/{productId}/images/{imageId} Xoá hình ảnh của sản phẩm. */
-  @DeleteMapping("/{productId}/images/{imageId}")
+  @DeleteMapping("/{productId:\\d+}/images/{imageId:\\d+}")
   public ResponseEntity<ApiResponse<ProductDto.AdminProductResponse>> deleteImage(
-      @PathVariable("productId") Integer productId, @PathVariable("imageId") Integer imageId) {
-    ProductDto.AdminProductResponse product = productService.adminDeleteImage(productId, imageId);
-    return ResponseEntity.ok(ApiResponse.success("Xoá hình ảnh thành công", product));
-  }
-
-  // ═══════════════════════════════════════════════════════════════════
-  // ██  Thống kê
-  // ═══════════════════════════════════════════════════════════════════
-
-  /** GET /api/admin/products/stats Lấy thống kê sản phẩm (tổng, active, inactive). */
-  @GetMapping("/stats")
-  public ResponseEntity<ApiResponse<Map<String, Object>>> getProductStats() {
-    Map<String, Object> stats = productService.adminGetProductStats();
-    return ResponseEntity.ok(ApiResponse.success("Thống kê sản phẩm", stats));
+      @PathVariable Integer productId, @PathVariable Integer imageId) {
+    return ResponseEntity.ok(
+        ApiResponse.success(
+            "Xoá hình ảnh thành công", productService.adminDeleteImage(productId, imageId)));
   }
 }

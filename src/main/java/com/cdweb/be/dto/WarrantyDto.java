@@ -78,6 +78,33 @@ public class WarrantyDto {
   }
 
   @Data
+  @Builder
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class StatsResponse {
+    private long total;
+    private long pending;
+    private long inProgress;
+    private long completed;
+    private long cancelled;
+    private long returned;
+  }
+
+  @Data
+  @Builder
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class ValidateTicketResponse {
+    private boolean valid;
+    private String message;
+    private boolean deviceFound;
+    private boolean warrantyValid;
+    private boolean hasActiveTicket;
+    private String activeTicketCode;
+    private Response warranty;
+  }
+
+  @Data
   @NoArgsConstructor
   @AllArgsConstructor
   public static class TicketRequest {

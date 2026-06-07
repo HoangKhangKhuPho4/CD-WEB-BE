@@ -3,6 +3,8 @@ package com.cdweb.be.entity;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 import lombok.*;
 
 @Entity
@@ -45,6 +47,28 @@ public class Coupon {
   @Column(name = "used_count")
   private Integer usedCount = 0;
 
+  /** Giới hạn số lần mỗi user được dùng (null = không giới hạn). */
+  @Column(name = "per_user_limit")
+  private Integer perUserLimit;
+
+  /** Chỉ áp dụng cho đơn đầu tiên của user. */
+  @Column(name = "first_order_only")
+  private Boolean firstOrderOnly = false;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "scope_type")
+  private ScopeType scopeType = ScopeType.ALL;
+
+  @ElementCollection(fetch = FetchType.EAGER)
+  @CollectionTable(name = "coupon_product_ids", joinColumns = @JoinColumn(name = "coupon_id"))
+  @Column(name = "product_id")
+  private Set<Integer> productIds = new HashSet<>();
+
+  @ElementCollection(fetch = FetchType.EAGER)
+  @CollectionTable(name = "coupon_product_type_ids", joinColumns = @JoinColumn(name = "coupon_id"))
+  @Column(name = "product_type_id")
+  private Set<Integer> productTypeIds = new HashSet<>();
+
   @Column(name = "date_start", nullable = false)
   private LocalDateTime dateStart;
 
@@ -60,7 +84,6 @@ public class Coupon {
   @Column(name = "updated_at")
   private LocalDateTime updatedAt;
 
-  // Relationships
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "created_by")
   private User createdBy;
@@ -73,6 +96,15 @@ public class Coupon {
   protected void onCreate() {
     createdAt = LocalDateTime.now();
     updatedAt = LocalDateTime.now();
+    if (usedCount == null) {
+      usedCount = 0;
+    }
+    if (productIds == null) {
+      productIds = new HashSet<>();
+    }
+    if (productTypeIds == null) {
+      productTypeIds = new HashSet<>();
+    }
   }
 
   @PreUpdate
@@ -83,5 +115,11 @@ public class Coupon {
   public enum DiscountType {
     PERCENT,
     FIXED
+  }
+
+  public enum ScopeType {
+    ALL,
+    PRODUCTS,
+    PRODUCT_TYPES
   }
 }

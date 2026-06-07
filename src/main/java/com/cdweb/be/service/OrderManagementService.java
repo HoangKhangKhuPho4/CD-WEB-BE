@@ -4,10 +4,13 @@ import com.cdweb.be.dto.GHNDto;
 import com.cdweb.be.dto.OrderManagementDto;
 import com.cdweb.be.entity.Order;
 import com.cdweb.be.entity.OrderDetail;
+import com.cdweb.be.entity.OrderItem;
 import com.cdweb.be.entity.OrderStatusHistory;
+import com.cdweb.be.entity.ProductItem;
 import com.cdweb.be.entity.User;
 import com.cdweb.be.exception.BadRequestException;
 import com.cdweb.be.repository.OrderDetailRepository;
+import com.cdweb.be.repository.OrderItemRepository;
 import com.cdweb.be.repository.OrderRepository;
 import com.cdweb.be.repository.OrderStatusHistoryRepository;
 import com.cdweb.be.repository.UserRepository;
@@ -37,8 +40,10 @@ public class OrderManagementService {
     private static final List<Order.OrderStatus> VALID_TRANSITIONS = List.of(
             Order.OrderStatus.PENDING,
             Order.OrderStatus.CONFIRMED,
+            Order.OrderStatus.PROCESSING,
             Order.OrderStatus.SHIPPING,
             Order.OrderStatus.DELIVERED,
+            Order.OrderStatus.COMPLETED,
             Order.OrderStatus.CANCELLED
     );
 
@@ -48,6 +53,8 @@ public class OrderManagementService {
     @Autowired private UserRepository userRepository;
     @Autowired private EmailService emailService;
     @Autowired private GhnService ghnService;
+    @Autowired private ImeiService imeiService;
+    @Autowired private OrderItemRepository orderItemRepository;
 
     // ── Admin: danh sách đơn (có filter) ──
     @Transactional(readOnly = true)
@@ -60,10 +67,30 @@ public class OrderManagementService {
             catch (IllegalArgumentException ignored) {}
         }
 
-        Page<Order> orders = (keyword != null && !keyword.isBlank())
-                ? orderRepository.searchOrders(keyword, status, pageable)
+        String kw = keyword != null ? keyword.trim() : null;
+        Page<Order> orders = (kw != null && !kw.isBlank())
+                ? orderRepository.searchOrders(
+                        kw, extractPhoneDigits(kw), phoneSuffix9(kw), status, pageable)
                 : orderRepository.findByStatusFilter(status, pageable);
         return orders.map(this::toSummary);
+    }
+
+    /** Chỉ giữ chữ số — hỗ trợ tìm SĐT dạng 0901 234 567 hoặc 0901-234-567. */
+    private static String extractPhoneDigits(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return null;
+        }
+        String digits = keyword.replaceAll("\\D+", "");
+        return digits.isBlank() ? null : digits;
+    }
+
+    /** 9 số cuối — khớp khi gõ thiếu số 0 đầu (912345678 ↔ 0912345678). */
+    private static String phoneSuffix9(String keyword) {
+        String digits = extractPhoneDigits(keyword);
+        if (digits == null || digits.length() < 9) {
+            return null;
+        }
+        return digits.substring(digits.length() - 9);
     }
 
     // ── Admin: chi tiết đơn ──
@@ -104,6 +131,13 @@ public class OrderManagementService {
 
         order.setStatus(toStatus);
         orderRepository.save(order);
+
+        if (toStatus == Order.OrderStatus.CANCELLED) {
+            imeiService.restoreOrderInventory(orderId);
+        }
+        if (toStatus == Order.OrderStatus.DELIVERED) {
+            imeiService.activateWarrantyForOrder(orderId);
+        }
 
         // Gửi email thông báo
         sendStatusEmail(order);
@@ -183,6 +217,7 @@ public class OrderManagementService {
         saveHistory(order, Order.OrderStatus.CANCELLED, "Khách hủy: " + reason, user);
         order.setStatus(Order.OrderStatus.CANCELLED);
         orderRepository.save(order);
+        imeiService.restoreOrderInventory(orderId);
         sendStatusEmail(order);
 
         return toDetail(order);
@@ -219,6 +254,12 @@ public class OrderManagementService {
                 if (!hasAnyAuthority("ORDER_TRACKING_UPDATE")) {
                     throw new BadRequestException(
                             "Bạn không có quyền cập nhật giao hàng (ORDER_TRACKING_UPDATE)");
+                }
+            }
+            case COMPLETED -> {
+                if (!hasAnyAuthority("ORDER_TRACKING_UPDATE")) {
+                    throw new BadRequestException(
+                            "Bạn không có quyền hoàn tất đơn hàng (ORDER_TRACKING_UPDATE)");
                 }
             }
             default ->
@@ -326,8 +367,15 @@ public class OrderManagementService {
         r.setId(o.getId());
         r.setOrderCode(o.getOrderCode());
         r.setStatus(o.getStatus() != null ? o.getStatus().name().toLowerCase() : "unknown"); // Convert Enum to String for DTO
-        r.setCustomerName(o.getUser() != null ? o.getUser().getFullName() : "");
+        r.setCustomerName(
+                o.getUser() != null && o.getUser().getFullName() != null
+                        ? o.getUser().getFullName()
+                        : o.getShippingName());
         r.setCustomerEmail(o.getUser() != null ? o.getUser().getEmail() : "");
+        r.setCustomerPhone(
+                o.getUser() != null && o.getUser().getPhone() != null
+                        ? o.getUser().getPhone()
+                        : o.getShippingPhone());
         r.setTotal(o.getTotalAmount());
         r.setPaymentMethod(o.getPaymentMethod() != null ? o.getPaymentMethod().name() : "");
         r.setPaymentStatus(o.getPaymentStatus() != null ? o.getPaymentStatus().name() : "");
@@ -374,7 +422,16 @@ public class OrderManagementService {
                 ir.setProductName(item.getProductName());
                 ir.setQuantity(item.getQuantity());
                 ir.setUnitPrice(item.getUnitPrice());
-                ir.setSubtotal(item.getTotalPrice()); // Dùng luôn totalPrice có sẵn trong OrderDetail
+                ir.setSubtotal(item.getTotalPrice());
+
+                List<OrderItem> assigned = orderItemRepository.findByOrderDetailId(item.getId());
+                ir.setAssignedImeis(
+                        assigned.stream()
+                                .map(OrderItem::getProductItem)
+                                .filter(pi -> pi != null)
+                                .map(ProductItem::getImei)
+                                .filter(imei -> imei != null && !imei.isBlank())
+                                .collect(Collectors.toList()));
 
                 return ir;
             }).collect(Collectors.toList()));

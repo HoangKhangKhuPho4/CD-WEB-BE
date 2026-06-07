@@ -13,6 +13,8 @@ import com.cdweb.be.dto.statistics.TopProductStatsDTO;
 import com.cdweb.be.dto.statistics.TopProductsStatisticsDTO;
 import com.cdweb.be.service.StatisticsService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,16 +48,20 @@ public class StatisticsController {
 
   @GetMapping("/overview")
   @PreAuthorize("hasAnyAuthority('REPORT_REVENUE', 'ROLE_ADMIN')")
-  public ResponseEntity<OverviewStatisticsDTO> getOverviewStatistics() {
-    return ResponseEntity.ok(statisticsService.getOverviewStatistics());
+  public ResponseEntity<OverviewStatisticsDTO> getOverviewStatistics(
+      @RequestParam(required = false) String fromDate,
+      @RequestParam(required = false) String toDate) {
+    return ResponseEntity.ok(statisticsService.getOverviewStatistics(fromDate, toDate));
   }
 
   @GetMapping("/staff-overview")
   @PreAuthorize(
       "hasAnyAuthority('ORDER_MANAGE', 'ORDER_VIEW_ALL', 'STOCK_IMPORT', 'REPORT_SALES', "
           + "'INVENTORY_STAT', 'ROLE_ADMIN')")
-  public ResponseEntity<StaffOverviewStatisticsDTO> getStaffOverviewStatistics() {
-    return ResponseEntity.ok(statisticsService.getStaffOverviewStatistics());
+  public ResponseEntity<StaffOverviewStatisticsDTO> getStaffOverviewStatistics(
+      @RequestParam(required = false) String fromDate,
+      @RequestParam(required = false) String toDate) {
+    return ResponseEntity.ok(statisticsService.getStaffOverviewStatistics(fromDate, toDate));
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -77,8 +83,10 @@ public class StatisticsController {
 
   @GetMapping("/orders/by-status")
   @PreAuthorize("hasAnyAuthority('REPORT_REVENUE', 'REPORT_SALES', 'ROLE_ADMIN')")
-  public ResponseEntity<OrderStatusStatsDTO> getOrderStatusStats() {
-    return ResponseEntity.ok(statisticsService.getOrderStatusStats());
+  public ResponseEntity<OrderStatusStatsDTO> getOrderStatusStats(
+      @RequestParam(required = false) String fromDate,
+      @RequestParam(required = false) String toDate) {
+    return ResponseEntity.ok(statisticsService.getOrderStatusStats(fromDate, toDate));
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -89,8 +97,10 @@ public class StatisticsController {
   @PreAuthorize("hasAnyAuthority('REPORT_REVENUE', 'REPORT_SALES', 'ROLE_ADMIN')")
   public ResponseEntity<TopProductStatsDTO> getTopProductStats(
       @RequestParam(defaultValue = "best-selling") String type,
-      @RequestParam(defaultValue = "10") int limit) {
-    return ResponseEntity.ok(statisticsService.getTopProductStats(type, limit));
+      @RequestParam(defaultValue = "10") int limit,
+      @RequestParam(required = false) String fromDate,
+      @RequestParam(required = false) String toDate) {
+    return ResponseEntity.ok(statisticsService.getTopProductStats(type, limit, fromDate, toDate));
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -100,8 +110,10 @@ public class StatisticsController {
   @GetMapping("/orders/recent")
   @PreAuthorize("hasAnyAuthority('REPORT_REVENUE', 'REPORT_SALES', 'ROLE_ADMIN')")
   public ResponseEntity<RecentOrderDTO> getRecentOrders(
-      @RequestParam(defaultValue = "10") int limit) {
-    return ResponseEntity.ok(statisticsService.getRecentOrders(limit));
+      @RequestParam(defaultValue = "10") int limit,
+      @RequestParam(required = false) String fromDate,
+      @RequestParam(required = false) String toDate) {
+    return ResponseEntity.ok(statisticsService.getRecentOrders(limit, fromDate, toDate));
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -110,8 +122,27 @@ public class StatisticsController {
 
   @GetMapping("/payment-methods")
   @PreAuthorize("hasAnyAuthority('REPORT_REVENUE', 'ROLE_ADMIN')")
-  public ResponseEntity<PaymentMethodStatsDTO> getPaymentMethodStats() {
-    return ResponseEntity.ok(statisticsService.getPaymentMethodStats());
+  public ResponseEntity<PaymentMethodStatsDTO> getPaymentMethodStats(
+      @RequestParam(required = false) String fromDate,
+      @RequestParam(required = false) String toDate) {
+    return ResponseEntity.ok(statisticsService.getPaymentMethodStats(fromDate, toDate));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ██  EXPORT — CSV báo cáo doanh thu                                       ██
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  @GetMapping("/revenue/export")
+  @PreAuthorize("hasAnyAuthority('REPORT_REVENUE', 'ROLE_ADMIN')")
+  public ResponseEntity<byte[]> exportRevenueCsv(
+      @RequestParam(defaultValue = "month") String period,
+      @RequestParam(required = false) String startDate,
+      @RequestParam(required = false) String endDate) {
+    byte[] csv = statisticsService.exportRevenueCsv(period, startDate, endDate);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=revenue-report.csv")
+        .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
+        .body(csv);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

@@ -81,6 +81,7 @@ public class OrderManagementDto {
         private Integer quantity;
         private BigDecimal unitPrice;
         private BigDecimal subtotal;
+        private List<String> assignedImeis;
     }
 
     // ── Admin: danh sách đơn rút gọn ──
@@ -93,6 +94,7 @@ public class OrderManagementDto {
         private String status;
         private String customerName;
         private String customerEmail;
+        private String customerPhone;
         private BigDecimal total;
         private String paymentMethod;
         private String paymentStatus;

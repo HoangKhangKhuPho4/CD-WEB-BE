@@ -27,7 +27,7 @@ public class UserController {
   public ResponseEntity<ApiResponse<UserDto.Response>> getMyProfile() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
     String username = authentication.getName();
-    UserDto.Response user = userService.getUserByUsername(username);
+    UserDto.Response user = userService.getProfileByUsername(username);
     return ResponseEntity.ok(ApiResponse.success("Lấy thông tin cá nhân thành công", user));
   }
 
@@ -39,7 +39,7 @@ public class UserController {
     String username = authentication.getName();
 
     // Bây giờ currentUser.getId() sẽ trả về Long, khớp hoàn toàn với Service
-    UserDto.Response currentUser = userService.getUserByUsername(username);
+    UserDto.Response currentUser = userService.getProfileByUsername(username);
     UserDto.Response updatedUser = userService.updateUser(currentUser.getId(), updateRequest);
 
     return ResponseEntity.ok(

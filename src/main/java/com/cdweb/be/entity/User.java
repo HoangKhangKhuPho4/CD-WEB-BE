@@ -30,6 +30,10 @@ public class User {
   @Column(name = "full_name", nullable = false)
   private String fullName;
 
+  /** Cột legacy trong DB cũ — đồng bộ từ {@link #fullName} khi insert/update. */
+  @Column(name = "name")
+  private String name;
+
   private String phone;
 
   private LocalDate birth;
@@ -104,6 +108,7 @@ public class User {
     this.createdAt = LocalDateTime.now();
     this.updatedAt = LocalDateTime.now();
     ensureEnabledDefault();
+    syncLegacyName();
     if (this.provider == null) {
       this.provider = "LOCAL";
     }
@@ -113,6 +118,14 @@ public class User {
   protected void onUpdate() {
     this.updatedAt = LocalDateTime.now();
     ensureEnabledDefault();
+    syncLegacyName();
+  }
+
+  /** Ghi {@code name} cho schema MariaDB còn cột NOT NULL cũ. */
+  private void syncLegacyName() {
+    if (fullName != null && !fullName.isBlank()) {
+      this.name = fullName;
+    }
   }
 
 }

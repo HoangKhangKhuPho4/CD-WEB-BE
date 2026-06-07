@@ -142,6 +142,8 @@ public class RbacDataInitializer implements ApplicationRunner {
       {"WARRANTY_MANAGE", "Quản lý bảo hành", "Xử lý bảo hành"},
       {"REPORT_SALES", "Báo cáo bán hàng", "Thống kê bán hàng"},
       {"PRODUCT_MANAGE", "Quản lý sản phẩm", "CRUD sản phẩm, danh mục, coupon"},
+      {"REVIEW_MANAGE", "Quản lý đánh giá", "Duyệt, ẩn, xóa đánh giá sản phẩm"},
+      {"REVIEW_REPLY", "Phản hồi đánh giá", "Trả lời khách hàng trên đánh giá"},
       {"ORDER_MANAGE", "Quản lý đơn hàng", "Quản trị đơn hàng admin"},
       {"CUSTOMER_VIEW", "Xem khách hàng", "Xem danh sách khách hàng"},
       {"STOCK_RETURN", "Trả hàng kho", "Xử lý trả hàng nhập kho"},

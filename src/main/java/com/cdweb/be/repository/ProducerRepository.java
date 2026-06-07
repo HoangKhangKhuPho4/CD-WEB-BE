@@ -1,6 +1,7 @@
 package com.cdweb.be.repository;
 
 import com.cdweb.be.entity.Producer;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,4 +26,10 @@ public interface ProducerRepository
 
   Page<Producer> findByIsActiveAndNameContainingIgnoreCaseOrIsActiveAndCodeContainingIgnoreCase(
       Boolean isActive1, String name, Boolean isActive2, String code, Pageable pageable);
+
+  List<Producer> findByIsActive(Boolean isActive);
+
+  long countByIsActiveTrue();
+
+  long countByIsActiveFalse();
 }

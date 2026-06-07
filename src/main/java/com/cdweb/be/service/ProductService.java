@@ -18,6 +18,7 @@ import com.cdweb.be.repository.ProductRepository;
 import com.cdweb.be.repository.ProductSpecification;
 import com.cdweb.be.repository.ProductTypeRepository;
 import com.cdweb.be.repository.ProductVariantRepository;
+import com.cdweb.be.repository.ReviewRepository;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -54,6 +55,7 @@ public class ProductService {
   @Autowired private ProductVariantRepository productVariantRepository;
 
   @Autowired private OrderDetailRepository orderDetailRepository;
+  @Autowired private ReviewRepository reviewRepository;
   @Autowired private AttributeValueRepository attributeValueRepository;
   @Autowired private ImageRepository imageRepository;
   @Autowired private ModelMapper modelMapper;
@@ -70,6 +72,20 @@ public class ProductService {
         productRepository
             .findById(id.intValue())
             .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
+    if (product.getIsActive() == null || !product.getIsActive()) {
+      throw new ResourceNotFoundException("Product", "id", id);
+    }
+    return mapToResponse(product);
+  }
+
+  public ProductDto.Response getProductBySlug(String slug) {
+    Product product =
+        productRepository
+            .findBySlug(slug)
+            .orElseThrow(() -> new ResourceNotFoundException("Product", "slug", slug));
+    if (product.getIsActive() == null || !product.getIsActive()) {
+      throw new ResourceNotFoundException("Product", "slug", slug);
+    }
     return mapToResponse(product);
   }
 
@@ -388,10 +404,10 @@ public class ProductService {
     }
     response.setQuantity(totalQuantity);
 
-    // Calculate average rating and review count
-    // This would be implemented when Review functionality is added
-    response.setAverageRating(0.0);
-    response.setReviewCount(0);
+    Double avgRating = reviewRepository.findAverageRatingByProductId(product.getId());
+    Integer reviewCount = reviewRepository.countApprovedByProductId(product.getId());
+    response.setAverageRating(avgRating != null ? Math.round(avgRating * 10.0) / 10.0 : 0.0);
+    response.setReviewCount(reviewCount != null ? reviewCount : 0);
 
     // Map images: CHỈ trả ảnh chung (variant_id = null) hoặc ảnh thuộc variant ACTIVE
     if (product.getImages() != null && !product.getImages().isEmpty()) {
@@ -493,10 +509,11 @@ public class ProductService {
       Boolean isActive,
       Integer productTypeId,
       Integer producerId,
+      Boolean isFeatured,
       Pageable pageable) {
     Page<Product> products =
         productRepository.adminSearchProducts(
-            keyword, isActive, productTypeId, producerId, pageable);
+            keyword, isActive, productTypeId, producerId, isFeatured, pageable);
     return products.map(
         product -> {
           ProductDto.AdminProductListResponse response =
@@ -532,8 +549,9 @@ public class ProductService {
   public ProductDto.AdminProductResponse adminGetProductById(Integer id) {
     Product product =
         productRepository
-            .findById(id)
+            .findByIdWithAdminBasics(id)
             .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
+    product.setVariants(productVariantRepository.findByProductIdWithAttributes(id));
     ProductDto.AdminProductResponse response =
         modelMapper.map(product, ProductDto.AdminProductResponse.class);
     response.setBasePrice(
@@ -612,7 +630,10 @@ public class ProductService {
         productRepository
             .findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
-    if (request.getName() != null) product.setName(request.getName());
+    if (request.getName() != null) {
+      product.setName(request.getName());
+      product.setSlug(generateUniqueSlug(request.getName(), id));
+    }
     if (request.getPrice() != null) product.setBasePrice(BigDecimal.valueOf(request.getPrice()));
     if (request.getDetail() != null) product.setDescription(request.getDetail());
     if (request.getStatus() != null)
@@ -668,7 +689,12 @@ public class ProductService {
             .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
     ProductVariant variant = new ProductVariant();
     variant.setProduct(product);
-    if (request.getSkuCode() != null) variant.setSkuCode(request.getSkuCode());
+    String sku =
+        request.getSkuCode() != null && !request.getSkuCode().isBlank()
+            ? request.getSkuCode().trim()
+            : "SKU-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+    assertSkuAvailable(sku, null);
+    variant.setSkuCode(sku);
     if (request.getVariantName() != null) variant.setVariantName(request.getVariantName());
     if (request.getPrice() != null) variant.setPrice(BigDecimal.valueOf(request.getPrice()));
     if (request.getOriginalPrice() != null)
@@ -693,7 +719,10 @@ public class ProductService {
         productVariantRepository
             .findById(variantId)
             .orElseThrow(() -> new ResourceNotFoundException("Variant", "id", variantId));
-    if (request.getSkuCode() != null) variant.setSkuCode(request.getSkuCode());
+    if (request.getSkuCode() != null && !request.getSkuCode().isBlank()) {
+      assertSkuAvailable(request.getSkuCode().trim(), variantId);
+      variant.setSkuCode(request.getSkuCode().trim());
+    }
     if (request.getVariantName() != null) variant.setVariantName(request.getVariantName());
     if (request.getPrice() != null) variant.setPrice(BigDecimal.valueOf(request.getPrice()));
     if (request.getOriginalPrice() != null)
@@ -772,11 +801,132 @@ public class ProductService {
     return adminGetProductById(productId);
   }
 
-  public Map<String, Object> adminGetProductStats() {
-    Map<String, Object> stats = new HashMap<>();
-    stats.put("totalActive", productRepository.countByIsActive(true));
-    stats.put("totalInactive", productRepository.countByIsActive(false));
-    stats.put("totalProducts", productRepository.count());
-    return stats;
+  public ProductDto.AdminStatsResponse adminGetProductStats() {
+    return new ProductDto.AdminStatsResponse(
+        productRepository.count(),
+        productRepository.countByIsActive(true),
+        productRepository.countByIsActive(false),
+        productRepository.countByIsFeatured(true),
+        productVariantRepository.findLowStockVariants().size(),
+        productVariantRepository.countByIsActiveTrue());
+  }
+
+  public ProductDto.ValidateSkuResponse validateSku(ProductDto.ValidateSkuRequest request) {
+    String sku = request.getSkuCode().trim();
+    var existing = productVariantRepository.findBySkuCode(sku);
+    if (existing.isEmpty()
+        || (request.getExcludeVariantId() != null
+            && existing.get().getId().equals(request.getExcludeVariantId()))) {
+      return new ProductDto.ValidateSkuResponse(sku, true, "SKU khả dụng", null, null);
+    }
+    ProductVariant v = existing.get();
+    return new ProductDto.ValidateSkuResponse(
+        sku,
+        false,
+        "SKU đã được sử dụng",
+        v.getId(),
+        v.getProduct() != null ? v.getProduct().getId() : null);
+  }
+
+  public ProductDto.BulkStatusResult adminBulkStatus(ProductDto.BulkStatusRequest request) {
+    int success = 0;
+    int fail = 0;
+    List<String> errors = new ArrayList<>();
+    for (Integer id : request.getIds()) {
+      try {
+        Product product =
+            productRepository
+                .findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
+        product.setIsActive(request.getIsActive());
+        productRepository.save(product);
+        success++;
+      } catch (Exception e) {
+        fail++;
+        errors.add("ID " + id + ": " + e.getMessage());
+      }
+    }
+    return new ProductDto.BulkStatusResult(success, fail, errors);
+  }
+
+  public ProductDto.AdminProductResponse adminSetFeatured(
+      Integer id, ProductDto.FeaturedRequest request) {
+    Product product =
+        productRepository
+            .findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
+    product.setIsFeatured(request.getIsFeatured());
+    productRepository.save(product);
+    return adminGetProductById(id);
+  }
+
+  public ProductDto.AdminProductResponse adminSetVariantStock(
+      Integer productId, Integer variantId, ProductDto.VariantStockRequest request) {
+    ProductVariant variant =
+        productVariantRepository
+            .findById(variantId)
+            .orElseThrow(() -> new ResourceNotFoundException("Variant", "id", variantId));
+    if (variant.getProduct() == null || !variant.getProduct().getId().equals(productId)) {
+      throw new BadRequestException("Variant không thuộc sản phẩm #" + productId);
+    }
+    variant.setStockQuantity(request.getStockQuantity());
+    productVariantRepository.save(variant);
+    return adminGetProductById(productId);
+  }
+
+  public ProductDto.AdminProductResponse adminGetProductBySlug(String slug) {
+    Product product =
+        productRepository
+            .findBySlug(slug)
+            .orElseThrow(() -> new ResourceNotFoundException("Product", "slug", slug));
+    return adminGetProductById(product.getId());
+  }
+
+  private void assertSkuAvailable(String sku, Integer excludeVariantId) {
+    productVariantRepository
+        .findBySkuCode(sku)
+        .ifPresent(
+            v -> {
+              if (excludeVariantId == null || !v.getId().equals(excludeVariantId)) {
+                throw new BadRequestException("SKU \"" + sku + "\" đã tồn tại trong hệ thống");
+              }
+            });
+  }
+
+  private String generateUniqueSlug(String name, Integer excludeId) {
+    String base = slugify(name);
+    if (base.isEmpty()) {
+      base = "product";
+    }
+    String candidate = base;
+    int suffix = 1;
+    while (true) {
+      var existing = productRepository.findBySlug(candidate);
+      if (existing.isEmpty()
+          || (excludeId != null && existing.get().getId().equals(excludeId))) {
+        break;
+      }
+      candidate = base + "-" + suffix++;
+    }
+    return candidate;
+  }
+
+  private static String slugify(String name) {
+    if (name == null) {
+      return "";
+    }
+    return name
+        .trim()
+        .toLowerCase()
+        .replaceAll("[àáạảãâầấậẩẫăằắặẳẵ]", "a")
+        .replaceAll("[èéẹẻẽêềếệểễ]", "e")
+        .replaceAll("[ìíịỉĩ]", "i")
+        .replaceAll("[òóọỏõôồốộổỗơờớợởỡ]", "o")
+        .replaceAll("[ùúụủũưừứựửữ]", "u")
+        .replaceAll("[ỳýỵỷỹ]", "y")
+        .replaceAll("[đ]", "d")
+        .replaceAll("\\s+", "-")
+        .replaceAll("[^a-z0-9-]", "")
+        .replaceAll("-+", "-");
   }
 }

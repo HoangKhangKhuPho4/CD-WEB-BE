@@ -3,6 +3,7 @@ package com.cdweb.be.service.impl;
 import com.cdweb.be.dto.statistics.*;
 import com.cdweb.be.entity.Order;
 import com.cdweb.be.entity.ProductVariant;
+import com.cdweb.be.exception.BadRequestException;
 import com.cdweb.be.repository.OrderDetailRepository;
 import com.cdweb.be.repository.OrderRepository;
 import com.cdweb.be.repository.ProductVariantRepository;
@@ -13,6 +14,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.nio.charset.StandardCharsets;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -49,41 +53,86 @@ public class StatisticsServiceImpl implements StatisticsService {
 
   private final Order.OrderStatus CANCELLED_STATUS = Order.OrderStatus.CANCELLED;
 
+  private static final Set<String> REVENUE_PERIODS = Set.of("day", "month", "year");
+  private static final Set<String> TOP_PRODUCT_TYPES = Set.of("best-selling", "low-stock");
+  private static final int MIN_LIST_LIMIT = 1;
+  private static final int MAX_LIST_LIMIT = 100;
+
   // ═══════════════════════════════════════════════════════════════════════════
   // ██  API 1: OVERVIEW STATISTICS — 4 KPI Cards + Growth %                ██
   // ═══════════════════════════════════════════════════════════════════════════
 
   @Override
-  public OverviewStatisticsDTO getOverviewStatistics() {
-    // ── Lấy 4 KPI chính ──────────────────────────────────────────────────
-    BigDecimal totalRevenue = orderRepository.sumRevenueCompleted(COMPLETED_STATUSES);
-    Long totalOrders = orderRepository.countActiveOrders(CANCELLED_STATUS);
-    Long totalCustomers = orderRepository.countDistinctCustomers(CANCELLED_STATUS);
-    Long totalProductsSold = orderDetailRepository.sumTotalProductsSold(COMPLETED_STATUSES);
-    Long pendingOrders = orderRepository.countByStatus(Order.OrderStatus.PENDING);
+  public OverviewStatisticsDTO getOverviewStatistics(String fromDateStr, String toDateStr) {
+    Optional<DateRange> range = parseOptionalDateRange(fromDateStr, toDateStr, "fromDate", "toDate");
 
-    // ── Tính Growth % (tháng này vs tháng trước) ─────────────────────────
-    LocalDateTime now = LocalDateTime.now();
-    LocalDateTime startOfThisMonth = now.withDayOfMonth(1).with(LocalTime.MIN);
-    LocalDateTime startOfLastMonth = startOfThisMonth.minusMonths(1);
+    if (range.isEmpty()) {
+      BigDecimal totalRevenue = orderRepository.sumRevenueCompleted(COMPLETED_STATUSES);
+      Long totalOrders = orderRepository.countActiveOrders(CANCELLED_STATUS);
+      Long totalCustomers = orderRepository.countDistinctCustomers(CANCELLED_STATUS);
+      Long totalProductsSold = orderDetailRepository.sumTotalProductsSold(COMPLETED_STATUSES);
+      Long pendingOrders = orderRepository.countByStatus(Order.OrderStatus.PENDING);
 
-    BigDecimal revenueThisMonth =
-        orderRepository.sumRevenueByDateRange(startOfThisMonth, now, COMPLETED_STATUSES);
-    BigDecimal revenueLastMonth =
+      LocalDateTime now = LocalDateTime.now();
+      LocalDateTime startOfThisMonth = now.withDayOfMonth(1).with(LocalTime.MIN);
+      LocalDateTime startOfLastMonth = startOfThisMonth.minusMonths(1);
+
+      BigDecimal revenueThisMonth =
+          orderRepository.sumRevenueByDateRange(startOfThisMonth, now, COMPLETED_STATUSES);
+      BigDecimal revenueLastMonth =
+          orderRepository.sumRevenueByDateRange(
+              startOfLastMonth, startOfThisMonth, COMPLETED_STATUSES);
+
+      Long ordersThisMonth =
+          orderRepository.countOrdersByDateRange(startOfThisMonth, now, CANCELLED_STATUS);
+      Long ordersLastMonth =
+          orderRepository.countOrdersByDateRange(
+              startOfLastMonth, startOfThisMonth, CANCELLED_STATUS);
+
+      Long customersThisMonth =
+          orderRepository.countDistinctCustomersByDateRange(
+              startOfThisMonth, now, CANCELLED_STATUS);
+      Long customersLastMonth =
+          orderRepository.countDistinctCustomersByDateRange(
+              startOfLastMonth, startOfThisMonth, CANCELLED_STATUS);
+
+      return OverviewStatisticsDTO.builder()
+          .totalRevenue(totalRevenue)
+          .totalOrders(totalOrders)
+          .totalCustomers(totalCustomers)
+          .totalProductsSold(totalProductsSold)
+          .pendingOrders(pendingOrders)
+          .revenueGrowthPercent(calculateGrowthPercent(revenueThisMonth, revenueLastMonth))
+          .orderGrowthPercent(calculateGrowthPercentLong(ordersThisMonth, ordersLastMonth))
+          .customerGrowthPercent(
+              calculateGrowthPercentLong(customersThisMonth, customersLastMonth))
+          .build();
+    }
+
+    DateRange dr = range.get();
+    BigDecimal totalRevenue =
+        orderRepository.sumRevenueByDateRange(dr.start(), dr.end(), COMPLETED_STATUSES);
+    Long totalOrders =
+        orderRepository.countOrdersByDateRange(dr.start(), dr.end(), CANCELLED_STATUS);
+    Long totalCustomers =
+        orderRepository.countDistinctCustomersByDateRange(dr.start(), dr.end(), CANCELLED_STATUS);
+    Long totalProductsSold =
+        orderDetailRepository.sumTotalProductsSoldByDateRange(
+            COMPLETED_STATUSES, dr.start(), dr.end());
+    Long pendingOrders =
+        orderRepository.countByStatusAndDateRange(
+            Order.OrderStatus.PENDING, dr.start(), dr.end());
+
+    DateRange previous = previousPeriodOfSameLength(dr);
+    BigDecimal revenuePrev =
         orderRepository.sumRevenueByDateRange(
-            startOfLastMonth, startOfThisMonth, COMPLETED_STATUSES);
-
-    Long ordersThisMonth =
-        orderRepository.countOrdersByDateRange(startOfThisMonth, now, CANCELLED_STATUS);
-    Long ordersLastMonth =
+            previous.start(), previous.end(), COMPLETED_STATUSES);
+    Long ordersPrev =
         orderRepository.countOrdersByDateRange(
-            startOfLastMonth, startOfThisMonth, CANCELLED_STATUS);
-
-    Long customersThisMonth =
-        orderRepository.countDistinctCustomersByDateRange(startOfThisMonth, now, CANCELLED_STATUS);
-    Long customersLastMonth =
+            previous.start(), previous.end(), CANCELLED_STATUS);
+    Long customersPrev =
         orderRepository.countDistinctCustomersByDateRange(
-            startOfLastMonth, startOfThisMonth, CANCELLED_STATUS);
+            previous.start(), previous.end(), CANCELLED_STATUS);
 
     return OverviewStatisticsDTO.builder()
         .totalRevenue(totalRevenue)
@@ -91,9 +140,9 @@ public class StatisticsServiceImpl implements StatisticsService {
         .totalCustomers(totalCustomers)
         .totalProductsSold(totalProductsSold)
         .pendingOrders(pendingOrders)
-        .revenueGrowthPercent(calculateGrowthPercent(revenueThisMonth, revenueLastMonth))
-        .orderGrowthPercent(calculateGrowthPercentLong(ordersThisMonth, ordersLastMonth))
-        .customerGrowthPercent(calculateGrowthPercentLong(customersThisMonth, customersLastMonth))
+        .revenueGrowthPercent(calculateGrowthPercent(totalRevenue, revenuePrev))
+        .orderGrowthPercent(calculateGrowthPercentLong(totalOrders, ordersPrev))
+        .customerGrowthPercent(calculateGrowthPercentLong(totalCustomers, customersPrev))
         .build();
   }
 
@@ -103,15 +152,24 @@ public class StatisticsServiceImpl implements StatisticsService {
 
   @Override
   public RevenueChartDTO getRevenueChart(String period, String startDateStr, String endDateStr) {
+    String effectivePeriod = normalizeRevenuePeriod(period);
+    validatePairedDateParams(startDateStr, endDateStr);
+
     // ── Xác định khoảng thời gian mặc định ──────────────────────────────
     LocalDateTime start;
     LocalDateTime end = LocalDateTime.now();
 
-    if (startDateStr != null && endDateStr != null) {
-      start = LocalDate.parse(startDateStr).atStartOfDay();
-      end = LocalDate.parse(endDateStr).atTime(LocalTime.MAX);
+    if (hasText(startDateStr) && hasText(endDateStr)) {
+      LocalDate startDate = parseIsoDate(startDateStr.trim(), "startDate");
+      LocalDate endDate = parseIsoDate(endDateStr.trim(), "endDate");
+      if (startDate.isAfter(endDate)) {
+        throw new BadRequestException("startDate không được lớn hơn endDate");
+      }
+      start = startDate.atStartOfDay();
+      end = endDate.atTime(LocalTime.MAX);
     } else {
-      switch (period != null ? period : "month") {
+      validatePairedDateParams(startDateStr, endDateStr);
+      switch (effectivePeriod) {
         case "day":
           start = end.minusDays(30).with(LocalTime.MIN); // 30 ngày gần nhất
           break;
@@ -125,7 +183,6 @@ public class StatisticsServiceImpl implements StatisticsService {
       }
     }
 
-    String effectivePeriod = period != null ? period : "month";
     List<RevenueChartDTO.DataPoint> dataPoints;
 
     switch (effectivePeriod) {
@@ -133,7 +190,7 @@ public class StatisticsServiceImpl implements StatisticsService {
         dataPoints = buildDailyDataPoints(start, end);
         break;
       case "year":
-        dataPoints = buildYearlyDataPoints();
+        dataPoints = buildYearlyDataPoints(start, end);
         break;
       case "month":
       default:
@@ -196,8 +253,10 @@ public class StatisticsServiceImpl implements StatisticsService {
         .collect(Collectors.toList());
   }
 
-  private List<RevenueChartDTO.DataPoint> buildYearlyDataPoints() {
-    List<Object[]> results = orderRepository.getRevenueByYear(COMPLETED_STATUSES);
+  private List<RevenueChartDTO.DataPoint> buildYearlyDataPoints(
+      LocalDateTime start, LocalDateTime end) {
+    List<Object[]> results =
+        orderRepository.getRevenueByYearInRange(start, end, COMPLETED_STATUSES);
 
     return results.stream()
         .map(
@@ -215,9 +274,16 @@ public class StatisticsServiceImpl implements StatisticsService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   @Override
-  public OrderStatusStatsDTO getOrderStatusStats() {
-    List<Object[]> results = orderRepository.countOrdersByEachStatus();
+  public OrderStatusStatsDTO getOrderStatusStats(String fromDateStr, String toDateStr) {
+    Optional<DateRange> range = parseOptionalDateRange(fromDateStr, toDateStr, "fromDate", "toDate");
+    List<Object[]> results =
+        range.isEmpty()
+            ? orderRepository.countOrdersByEachStatus()
+            : orderRepository.countOrdersByEachStatusInRange(range.get().start(), range.get().end());
+    return buildOrderStatusStats(results);
+  }
 
+  private OrderStatusStatsDTO buildOrderStatusStats(List<Object[]> results) {
     // Map label tiếng Việt + màu sắc cho từng trạng thái
     Map<String, String> labelMap =
         Map.of(
@@ -274,16 +340,32 @@ public class StatisticsServiceImpl implements StatisticsService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   @Override
-  public TopProductStatsDTO getTopProductStats(String type, int limit) {
-    if ("low-stock".equals(type)) {
+  public TopProductStatsDTO getTopProductStats(
+      String type, int limit, String fromDate, String toDate) {
+    String normalizedType = normalizeTopProductType(type);
+    int safeLimit = normalizeListLimit(limit);
+    if ("low-stock".equals(normalizedType)) {
       return buildLowStockStats();
     }
-    return buildBestSellingStats(limit);
+    Optional<DateRange> dateRange =
+        parseOptionalDateRange(fromDate, toDate, "fromDate", "toDate");
+    return buildBestSellingStats(safeLimit, dateRange);
   }
 
-  private TopProductStatsDTO buildBestSellingStats(int limit) {
+  private TopProductStatsDTO buildBestSellingStats(int limit, Optional<DateRange> dateRange) {
     List<Object[]> results =
-        orderDetailRepository.findTopSellingProducts(COMPLETED_STATUSES, PageRequest.of(0, limit));
+        dateRange
+            .map(
+                range ->
+                    orderDetailRepository.findTopSellingProductsByDateRange(
+                        COMPLETED_STATUSES,
+                        range.start(),
+                        range.end(),
+                        PageRequest.of(0, limit)))
+            .orElseGet(
+                () ->
+                    orderDetailRepository.findTopSellingProducts(
+                        COMPLETED_STATUSES, PageRequest.of(0, limit)));
     AtomicInteger rank = new AtomicInteger(1);
 
     List<TopProductStatsDTO.ProductStat> products =
@@ -351,8 +433,17 @@ public class StatisticsServiceImpl implements StatisticsService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   @Override
-  public RecentOrderDTO getRecentOrders(int limit) {
-    List<Order> orders = orderRepository.findRecentOrders(PageRequest.of(0, limit));
+  public RecentOrderDTO getRecentOrders(int limit, String fromDate, String toDate) {
+    int safeLimit = normalizeListLimit(limit);
+    Optional<DateRange> dateRange =
+        parseOptionalDateRange(fromDate, toDate, "fromDate", "toDate");
+    List<Order> orders =
+        dateRange
+            .map(
+                range ->
+                    orderRepository.findRecentOrdersByDateRange(
+                        range.start(), range.end(), PageRequest.of(0, safeLimit)))
+            .orElseGet(() -> orderRepository.findRecentOrders(PageRequest.of(0, safeLimit)));
 
     List<RecentOrderDTO.OrderSummary> summaries =
         orders.stream()
@@ -384,9 +475,36 @@ public class StatisticsServiceImpl implements StatisticsService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   @Override
-  public PaymentMethodStatsDTO getPaymentMethodStats() {
-    List<Object[]> results = orderRepository.getPaymentMethodStats(CANCELLED_STATUS);
+  public PaymentMethodStatsDTO getPaymentMethodStats(String fromDateStr, String toDateStr) {
+    Optional<DateRange> range = parseOptionalDateRange(fromDateStr, toDateStr, "fromDate", "toDate");
+    List<Object[]> results =
+        range.isEmpty()
+            ? orderRepository.getPaymentMethodStats(CANCELLED_STATUS)
+            : orderRepository.getPaymentMethodStatsByDateRange(
+                range.get().start(), range.get().end(), CANCELLED_STATUS);
+    return buildPaymentMethodStats(results);
+  }
 
+  @Override
+  public byte[] exportRevenueCsv(String period, String startDate, String endDate) {
+    RevenueChartDTO chart = getRevenueChart(period, startDate, endDate);
+    StringBuilder sb = new StringBuilder();
+    sb.append("period,label,revenue,orders\n");
+    if (chart.getDataPoints() != null) {
+      for (RevenueChartDTO.DataPoint dp : chart.getDataPoints()) {
+        sb.append(csvEscape(chart.getPeriod())).append(",");
+        sb.append(csvEscape(dp.getLabel())).append(",");
+        sb.append(dp.getRevenue() != null ? dp.getRevenue() : BigDecimal.ZERO).append(",");
+        sb.append(dp.getOrders() != null ? dp.getOrders() : 0L).append("\n");
+      }
+    }
+    sb.append("\nmetric,value\n");
+    sb.append("totalRevenue,").append(chart.getTotalRevenue() != null ? chart.getTotalRevenue() : 0).append("\n");
+    sb.append("averageRevenue,").append(chart.getAverageRevenue() != null ? chart.getAverageRevenue() : 0).append("\n");
+    return sb.toString().getBytes(StandardCharsets.UTF_8);
+  }
+
+  private PaymentMethodStatsDTO buildPaymentMethodStats(List<Object[]> results) {
     // Map label tiếng Việt + màu sắc
     Map<String, String> labelMap =
         Map.of(
@@ -536,7 +654,7 @@ public class StatisticsServiceImpl implements StatisticsService {
 
   @Override
   public TopProductsStatisticsDTO getTopProductsStatistics() {
-    TopProductStatsDTO stats = getTopProductStats("best-selling", 10);
+    TopProductStatsDTO stats = getTopProductStats("best-selling", 10, null, null);
     TopProductsStatisticsDTO dto = new TopProductsStatisticsDTO();
     if (stats.getProducts() == null) {
       dto.setTopProducts(List.of());
@@ -607,21 +725,50 @@ public class StatisticsServiceImpl implements StatisticsService {
   }
 
   @Override
-  public StaffOverviewStatisticsDTO getStaffOverviewStatistics() {
-    LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-    LocalDateTime endOfDay = LocalDate.now().atTime(LocalTime.MAX);
-    Long ordersToday =
-        orderRepository.countOrdersByDateRange(startOfDay, endOfDay, CANCELLED_STATUS);
+  public StaffOverviewStatisticsDTO getStaffOverviewStatistics(
+      String fromDate, String toDate) {
+    Optional<DateRange> dateRange =
+        parseOptionalDateRange(fromDate, toDate, "fromDate", "toDate");
 
-    long pending = nullSafeCount(orderRepository.countByStatus(Order.OrderStatus.PENDING));
-    long confirmed = nullSafeCount(orderRepository.countByStatus(Order.OrderStatus.CONFIRMED));
-    long shipping = nullSafeCount(orderRepository.countByStatus(Order.OrderStatus.SHIPPING));
+    long pending;
+    long confirmed;
+    long shipping;
+    long ordersInPeriod;
+
+    if (dateRange.isPresent()) {
+      DateRange range = dateRange.get();
+      pending =
+          nullSafeCount(
+              orderRepository.countByStatusAndDateRange(
+                  Order.OrderStatus.PENDING, range.start(), range.end()));
+      confirmed =
+          nullSafeCount(
+              orderRepository.countByStatusAndDateRange(
+                  Order.OrderStatus.CONFIRMED, range.start(), range.end()));
+      shipping =
+          nullSafeCount(
+              orderRepository.countByStatusAndDateRange(
+                  Order.OrderStatus.SHIPPING, range.start(), range.end()));
+      Long counted =
+          orderRepository.countOrdersByDateRange(
+              range.start(), range.end(), CANCELLED_STATUS);
+      ordersInPeriod = counted != null ? counted : 0L;
+    } else {
+      LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+      LocalDateTime endOfDay = LocalDate.now().atTime(LocalTime.MAX);
+      Long ordersToday =
+          orderRepository.countOrdersByDateRange(startOfDay, endOfDay, CANCELLED_STATUS);
+      ordersInPeriod = ordersToday != null ? ordersToday : 0L;
+      pending = nullSafeCount(orderRepository.countByStatus(Order.OrderStatus.PENDING));
+      confirmed = nullSafeCount(orderRepository.countByStatus(Order.OrderStatus.CONFIRMED));
+      shipping = nullSafeCount(orderRepository.countByStatus(Order.OrderStatus.SHIPPING));
+    }
 
     return StaffOverviewStatisticsDTO.builder()
         .pendingOrders(pending)
         .confirmedOrders(confirmed)
         .shippingOrders(shipping)
-        .ordersToday(ordersToday != null ? ordersToday : 0L)
+        .ordersToday(ordersInPeriod)
         .lowStockVariants(productVariantRepository.countLowStockVariants())
         .customerAccounts(userRepository.countCustomerAccounts())
         .build();
@@ -630,4 +777,87 @@ public class StatisticsServiceImpl implements StatisticsService {
   private long nullSafeCount(Long value) {
     return value != null ? value : 0L;
   }
+
+  private String normalizeRevenuePeriod(String period) {
+    if (!hasText(period)) {
+      return "month";
+    }
+    String normalized = period.trim().toLowerCase(Locale.ROOT);
+    if (!REVENUE_PERIODS.contains(normalized)) {
+      throw new BadRequestException("period phải là day, month hoặc year");
+    }
+    return normalized;
+  }
+
+  private void validatePairedDateParams(String fromStr, String toStr) {
+    boolean hasFrom = hasText(fromStr);
+    boolean hasTo = hasText(toStr);
+    if (hasFrom != hasTo) {
+      throw new BadRequestException("Tham số ngày phải được cung cấp theo cặp");
+    }
+  }
+
+  private Optional<DateRange> parseOptionalDateRange(
+      String fromStr, String toStr, String fromLabel, String toLabel) {
+    validatePairedDateParams(fromStr, toStr);
+    if (!hasText(fromStr)) {
+      return Optional.empty();
+    }
+    LocalDate from = parseIsoDate(fromStr.trim(), fromLabel);
+    LocalDate to = parseIsoDate(toStr.trim(), toLabel);
+    if (from.isAfter(to)) {
+      throw new BadRequestException(fromLabel + " không được lớn hơn " + toLabel);
+    }
+    return Optional.of(new DateRange(from.atStartOfDay(), to.atTime(LocalTime.MAX)));
+  }
+
+  private DateRange previousPeriodOfSameLength(DateRange current) {
+    long days =
+        ChronoUnit.DAYS.between(current.start().toLocalDate(), current.end().toLocalDate()) + 1;
+    LocalDateTime prevEnd = current.start().minusSeconds(1);
+    LocalDateTime prevStart = prevEnd.toLocalDate().minusDays(days - 1).atStartOfDay();
+    return new DateRange(prevStart, prevEnd);
+  }
+
+  private String csvEscape(String value) {
+    if (value == null) {
+      return "";
+    }
+    if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+      return "\"" + value.replace("\"", "\"\"") + "\"";
+    }
+    return value;
+  }
+
+  private LocalDate parseIsoDate(String value, String paramName) {
+    try {
+      return LocalDate.parse(value);
+    } catch (DateTimeParseException ex) {
+      throw new BadRequestException(paramName + " phải có định dạng yyyy-MM-dd");
+    }
+  }
+
+  private String normalizeTopProductType(String type) {
+    if (!hasText(type)) {
+      return "best-selling";
+    }
+    String normalized = type.trim().toLowerCase(Locale.ROOT);
+    if (!TOP_PRODUCT_TYPES.contains(normalized)) {
+      throw new BadRequestException("type phải là best-selling hoặc low-stock");
+    }
+    return normalized;
+  }
+
+  private int normalizeListLimit(int limit) {
+    if (limit < MIN_LIST_LIMIT) {
+      throw new BadRequestException("limit phải từ " + MIN_LIST_LIMIT + " đến " + MAX_LIST_LIMIT);
+    }
+    return Math.min(limit, MAX_LIST_LIMIT);
+  }
+
+  private boolean hasText(String value) {
+    return value != null && !value.isBlank();
+  }
+
+  private record DateRange(LocalDateTime start, LocalDateTime end) {}
 }

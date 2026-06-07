@@ -57,6 +57,7 @@ public class CustomCorsFilter implements Filter {
     return origin.equals("http://localhost:3000")
         || origin.equals("http://localhost:4200")
         || origin.equals("http://localhost:8081")
+        || origin.endsWith(".ngrok-free.app")
         || origin.startsWith("https://your-production-domain.com");
   }
 }

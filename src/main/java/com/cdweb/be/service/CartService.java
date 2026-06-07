@@ -9,6 +9,7 @@ import com.cdweb.be.exception.BadRequestException;
 import com.cdweb.be.exception.ResourceNotFoundException;
 import com.cdweb.be.repository.CartItemRepository;
 import com.cdweb.be.repository.CartRepository;
+import com.cdweb.be.repository.ImageRepository;
 import com.cdweb.be.repository.ProductVariantRepository;
 import com.cdweb.be.repository.UserRepository;
 import java.util.ArrayList;
@@ -27,6 +28,7 @@ public class CartService {
   private final CartItemRepository cartItemRepository;
   private final ProductVariantRepository productVariantRepository;
   private final UserRepository userRepository;
+  private final ImageRepository imageRepository;
 
   @Value("${app.server.url:http://localhost:8080}")
   private String serverUrl;
@@ -35,6 +37,7 @@ public class CartService {
   public CartDto.CartResponse getCart(String username) {
     User user = findUser(username);
     Cart cart = getOrCreateCart(user);
+    pruneInvalidCartItems(cart);
     return mapToCartResponse(cart);
   }
 
@@ -155,6 +158,30 @@ public class CartService {
     }
   }
 
+  /** Xóa dòng giỏ gắn biến thể/sản phẩm đã ngừng kinh doanh. */
+  private void pruneInvalidCartItems(Cart cart) {
+    List<CartItem> items = cart.getCartItems();
+    if (items == null || items.isEmpty()) {
+      return;
+    }
+    List<CartItem> toRemove = new ArrayList<>();
+    for (CartItem item : items) {
+      ProductVariant variant = item.getVariant();
+      if (variant == null
+          || !Boolean.TRUE.equals(variant.getIsActive())
+          || variant.getProduct() == null
+          || !Boolean.TRUE.equals(variant.getProduct().getIsActive())) {
+        toRemove.add(item);
+      }
+    }
+    if (toRemove.isEmpty()) {
+      return;
+    }
+    cart.getCartItems().removeAll(toRemove);
+    cartItemRepository.deleteAll(toRemove);
+    cartItemRepository.flush();
+  }
+
   // Các hàm mapToResponse giữ nguyên...
   private CartDto.CartResponse mapToCartResponse(Cart cart) {
     List<CartItem> items = cart.getCartItems();
@@ -217,16 +244,27 @@ public class CartService {
       vd.setProduct(pd);
     }
 
-    String imageUrl = null;
-    if (variant.getImages() != null && !variant.getImages().isEmpty()) {
-      imageUrl = serverUrl + "/img/" + variant.getImages().get(0).getId();
-    } else if (variant.getProduct() != null
-            && variant.getProduct().getImages() != null
-            && !variant.getProduct().getImages().isEmpty()) {
-      imageUrl = serverUrl + "/img/" + variant.getProduct().getImages().get(0).getId();
-    }
+    String imageUrl = resolveVariantImageUrl(variant);
     vd.setImageUrl(imageUrl);
 
     return vd;
+  }
+
+  /** Ảnh variant → ảnh product (lazy + query fallback). */
+  private String resolveVariantImageUrl(ProductVariant variant) {
+    if (variant.getImages() != null && !variant.getImages().isEmpty()) {
+      return serverUrl + "/img/" + variant.getImages().get(0).getId();
+    }
+    if (variant.getProduct() != null) {
+      var product = variant.getProduct();
+      if (product.getImages() != null && !product.getImages().isEmpty()) {
+        return serverUrl + "/img/" + product.getImages().get(0).getId();
+      }
+      var productImages = imageRepository.findByProductId(product.getId());
+      if (productImages != null && !productImages.isEmpty()) {
+        return serverUrl + "/img/" + productImages.get(0).getId();
+      }
+    }
+    return null;
   }
 }

@@ -300,4 +300,67 @@ public class ProductDto {
     private Integer variantId;
     private Boolean isDefault;
   }
+
+  // ── Extended admin DTOs (full test coverage) ─────────────────────────────
+
+  @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class AdminStatsResponse {
+    private long totalProducts;
+    private long totalActive;
+    private long totalInactive;
+    private long totalFeatured;
+    private long lowStockVariants;
+    private long totalVariants;
+  }
+
+  @Data
+  public static class ValidateSkuRequest {
+    @NotBlank(message = "SKU không được trống")
+    private String skuCode;
+    private Integer excludeVariantId;
+  }
+
+  @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class ValidateSkuResponse {
+    private String skuCode;
+    private boolean available;
+    private String message;
+    private Integer existingVariantId;
+    private Integer existingProductId;
+  }
+
+  @Data
+  public static class BulkStatusRequest {
+    @jakarta.validation.constraints.NotEmpty(message = "Danh sách ID không được trống")
+    private java.util.List<Integer> ids;
+
+    @NotNull(message = "Trạng thái isActive không được null")
+    private Boolean isActive;
+  }
+
+  @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class BulkStatusResult {
+    private int successCount;
+    private int failCount;
+    private java.util.List<String> errors;
+  }
+
+  @Data
+  public static class FeaturedRequest {
+    @NotNull(message = "isFeatured không được null")
+    private Boolean isFeatured;
+  }
+
+  @Data
+  public static class VariantStockRequest {
+    @NotNull(message = "Số lượng không được null")
+    @PositiveOrZero(message = "Số lượng không được âm")
+    private Integer stockQuantity;
+  }
 }

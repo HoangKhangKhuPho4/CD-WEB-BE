@@ -2,6 +2,7 @@ package com.cdweb.be.repository;
 
 import com.cdweb.be.entity.Product;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -35,6 +36,15 @@ public interface ProductRepository
   List<Product> findByProducerIdAndIsActive(Integer producerId, Boolean isActive);
 
   Page<Product> findByProducerIdAndIsActive(Integer producerId, Boolean isActive, Pageable pageable);
+
+  long countByProducerId(Integer producerId);
+
+  long countByProducerIdAndIsActive(Integer producerId, Boolean isActive);
+
+  Page<Product> findByProducerId(Integer producerId, Pageable pageable);
+
+  @Query("SELECT COUNT(DISTINCT p.producer.id) FROM Product p WHERE p.producer IS NOT NULL")
+  long countDistinctProducersWithProducts();
 
   @Query(
       "SELECT p FROM Product p WHERE p.isActive = true AND "
@@ -123,21 +133,39 @@ public interface ProductRepository
               + "       OR LOWER(p.description) LIKE LOWER(CONCAT('%', :keyword, '%'))) "
               + "AND (:isActive IS NULL OR p.isActive = :isActive) "
               + "AND (:productTypeId IS NULL OR p.productType.id = :productTypeId) "
-              + "AND (:producerId IS NULL OR p.producer.id = :producerId)",
+              + "AND (:producerId IS NULL OR p.producer.id = :producerId) "
+              + "AND (:isFeatured IS NULL OR p.isFeatured = :isFeatured)",
       countQuery =
           "SELECT COUNT(p) FROM Product p "
               + "WHERE (:keyword IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) "
               + "       OR LOWER(p.description) LIKE LOWER(CONCAT('%', :keyword, '%'))) "
               + "AND (:isActive IS NULL OR p.isActive = :isActive) "
               + "AND (:productTypeId IS NULL OR p.productType.id = :productTypeId) "
-              + "AND (:producerId IS NULL OR p.producer.id = :producerId)")
+              + "AND (:producerId IS NULL OR p.producer.id = :producerId) "
+              + "AND (:isFeatured IS NULL OR p.isFeatured = :isFeatured)")
   Page<Product> adminSearchProducts(
       @Param("keyword") String keyword,
       @Param("isActive") Boolean isActive,
       @Param("productTypeId") Integer productTypeId,
       @Param("producerId") Integer producerId,
+      @Param("isFeatured") Boolean isFeatured,
       Pageable pageable);
 
   /** Đếm sản phẩm theo trạng thái */
   long countByIsActive(Boolean isActive);
+
+  long countByIsFeatured(Boolean isFeatured);
+
+  Optional<Product> findBySlug(String slug);
+
+  boolean existsBySlugAndIdNot(String slug, Integer id);
+
+  /** Admin chi tiết SP — eager load danh mục, hãng, ảnh (tránh N+1). */
+  @Query(
+      "SELECT DISTINCT p FROM Product p "
+              + "LEFT JOIN FETCH p.productType "
+              + "LEFT JOIN FETCH p.producer "
+              + "LEFT JOIN FETCH p.images "
+              + "WHERE p.id = :id")
+  Optional<Product> findByIdWithAdminBasics(@Param("id") Integer id);
 }

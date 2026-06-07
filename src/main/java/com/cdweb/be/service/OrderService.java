@@ -1,5 +1,6 @@
 package com.cdweb.be.service;
 
+import com.cdweb.be.dto.CouponDto;
 import com.cdweb.be.dto.GHNDto;
 import com.cdweb.be.dto.OrderDto;
 import com.cdweb.be.entity.*;
@@ -37,6 +38,8 @@ public class OrderService {
 
   @Autowired private CouponRepository couponRepository;
 
+  @Autowired private CouponService couponService;
+
   @Autowired private OrderRepository orderRepository;
 
   @Autowired private OrderDetailRepository orderDetailRepository;
@@ -60,6 +63,8 @@ public class OrderService {
   @Autowired private EmailService emailService;
 
   @Autowired private CartService cartService;
+
+  @Autowired private ImeiService imeiService;
 
   @Value("${app.server.url:http://localhost:8080}")
   private String serverUrl;
@@ -161,48 +166,22 @@ public class OrderService {
       subtotal = subtotal.add(price.multiply(BigDecimal.valueOf(item.getQuantity())));
     }
 
-    // 6. Áp mã giảm giá
+    // 6. Áp mã giảm giá (per-user, first-order, scope sản phẩm)
     BigDecimal discountAmount = BigDecimal.ZERO;
     Coupon coupon = null;
     String couponCodeApplied = null;
 
     if (request.getCouponCode() != null && !request.getCouponCode().isBlank()) {
       String code = request.getCouponCode().trim().toUpperCase();
-      coupon =
-          couponRepository
-              .findActiveCouponByCode(code, LocalDateTime.now())
-              .orElseThrow(
-                  () -> new BadRequestException("Mã giảm giá không hợp lệ hoặc đã hết hạn"));
-
-      if (!Boolean.TRUE.equals(coupon.getIsActive())) {
-        throw new BadRequestException("Mã giảm giá đã bị vô hiệu hóa");
+      List<CouponDto.CheckoutLineItem> lineItems = buildLineItemsFromCart(items);
+      CouponDto.ValidateResponse validation =
+          couponService.validateForCheckout(code, user.getId(), subtotal, lineItems);
+      if (!Boolean.TRUE.equals(validation.getValid())) {
+        throw new BadRequestException(validation.getMessage());
       }
-      if (coupon.getUsageLimit() != null && coupon.getUsedCount() >= coupon.getUsageLimit()) {
-        throw new BadRequestException("Mã giảm giá đã đạt giới hạn sử dụng");
-      }
-      if (coupon.getMinOrderValue() != null && subtotal.compareTo(coupon.getMinOrderValue()) < 0) {
-        throw new BadRequestException(
-            "Đơn hàng tối thiểu "
-                + coupon.getMinOrderValue().toPlainString()
-                + " VNĐ để sử dụng mã này");
-      }
-
-      if (coupon.getDiscountType() == Coupon.DiscountType.PERCENT) {
-        discountAmount =
-            subtotal
-                .multiply(coupon.getDiscountValue())
-                .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP);
-        if (coupon.getMaxDiscountAmount() != null
-            && discountAmount.compareTo(coupon.getMaxDiscountAmount()) > 0) {
-          discountAmount = coupon.getMaxDiscountAmount();
-        }
-      } else { // FIXED
-        discountAmount = coupon.getDiscountValue();
-        if (discountAmount.compareTo(subtotal) > 0) {
-          discountAmount = subtotal;
-        }
-      }
-      couponCodeApplied = coupon.getCode();
+      discountAmount = validation.getDiscountAmount();
+      couponCodeApplied = code;
+      coupon = couponRepository.findByCode(code).orElse(null);
     }
 
     // 7. Phí vận chuyển — tính động từ GHN nếu có địa chỉ GHN
@@ -276,9 +255,8 @@ public class OrderService {
     }
 
     // 13. Cập nhật số lần dùng coupon
-    if (coupon != null) {
-      coupon.setUsedCount(coupon.getUsedCount() + 1);
-      couponRepository.save(coupon);
+    if (couponCodeApplied != null) {
+      couponService.incrementUsage(couponCodeApplied);
     }
 
     // 14. Xóa giỏ hàng
@@ -361,40 +339,13 @@ public class OrderService {
     }
 
     String code = couponCode.trim().toUpperCase();
-    Coupon coupon =
-        couponRepository
-            .findActiveCouponByCode(code, LocalDateTime.now())
-            .orElseThrow(() -> new BadRequestException("Mã giảm giá không hợp lệ hoặc đã hết hạn"));
-
-    if (!Boolean.TRUE.equals(coupon.getIsActive())) {
-      throw new BadRequestException("Mã giảm giá đã bị vô hiệu hóa");
+    List<CouponDto.CheckoutLineItem> lineItems = buildLineItemsFromCart(items);
+    CouponDto.ValidateResponse validation =
+        couponService.validateForCheckout(code, user.getId(), subtotal, lineItems);
+    if (!Boolean.TRUE.equals(validation.getValid())) {
+      throw new BadRequestException(validation.getMessage());
     }
-    if (coupon.getUsageLimit() != null && coupon.getUsedCount() >= coupon.getUsageLimit()) {
-      throw new BadRequestException("Mã giảm giá đã đạt giới hạn sử dụng");
-    }
-    if (coupon.getMinOrderValue() != null && subtotal.compareTo(coupon.getMinOrderValue()) < 0) {
-      throw new BadRequestException(
-          "Đơn hàng tối thiểu "
-              + coupon.getMinOrderValue().toPlainString()
-              + " VNĐ để sử dụng mã này");
-    }
-
-    BigDecimal discountAmount;
-    if (coupon.getDiscountType() == Coupon.DiscountType.PERCENT) {
-      discountAmount =
-          subtotal
-              .multiply(coupon.getDiscountValue())
-              .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP);
-      if (coupon.getMaxDiscountAmount() != null
-          && discountAmount.compareTo(coupon.getMaxDiscountAmount()) > 0) {
-        discountAmount = coupon.getMaxDiscountAmount();
-      }
-    } else {
-      discountAmount = coupon.getDiscountValue();
-      if (discountAmount.compareTo(subtotal) > 0) {
-        discountAmount = subtotal;
-      }
-    }
+    BigDecimal discountAmount = validation.getDiscountAmount();
 
     // previewCoupon: không có địa chỉ GHN → dùng fallback cố định
     BigDecimal shippingFee =
@@ -404,15 +355,15 @@ public class OrderService {
     BigDecimal finalAmount = subtotal.subtract(discountAmount).add(shippingFee);
 
     OrderDto.ApplyCouponResponse response = new OrderDto.ApplyCouponResponse();
-    response.setCouponCode(coupon.getCode());
-    response.setDiscountType(coupon.getDiscountType().name());
-    response.setDiscountValue(coupon.getDiscountValue());
+    response.setCouponCode(code);
+    response.setDiscountType(validation.getDiscountType());
+    response.setDiscountValue(validation.getDiscountValue());
     response.setOriginalSubtotal(subtotal);
     response.setDiscountAmount(discountAmount);
     response.setFinalAmount(finalAmount);
     response.setMessage(
         "Áp dụng mã \""
-            + coupon.getCode()
+            + code
             + "\" thành công, giảm "
             + discountAmount.toPlainString()
             + " VNĐ");
@@ -536,12 +487,7 @@ public class OrderService {
       productVariantRepository.save(variant);
     }
 
-    // Hoàn lại coupon
-    if (order.getCoupon() != null) {
-      Coupon coupon = order.getCoupon();
-      coupon.setUsedCount(Math.max(0, coupon.getUsedCount() - 1));
-      couponRepository.save(coupon);
-    }
+    restoreCoupon(order);
 
     order.setStatus(Order.OrderStatus.CANCELLED);
     order.setCancelledAt(LocalDateTime.now());
@@ -883,14 +829,7 @@ public class OrderService {
 
   // ─── Admin helper: hoàn kho ───────────────────────────────────────────────
   private void restoreStock(Integer orderId) {
-    List<OrderDetail> details = orderDetailRepository.findByOrderId(orderId);
-    for (OrderDetail detail : details) {
-      ProductVariant variant = detail.getVariant();
-      if (variant != null) {
-        variant.setStockQuantity(variant.getStockQuantity() + detail.getQuantity());
-        productVariantRepository.save(variant);
-      }
-    }
+    imeiService.restoreOrderInventory(orderId);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1002,42 +941,35 @@ public class OrderService {
    * ProductItem từ RESERVED → SOLD. - Gán warrantyStartDate = ngày giao hàng.
    */
   public void activateWarrantyForOrder(Integer orderId) {
-    List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
-    LocalDate today = LocalDate.now();
-
-    for (OrderItem oi : orderItems) {
-      ProductItem productItem = oi.getProductItem();
-      if (productItem.getStatus() == ProductItem.ProductItemStatus.RESERVED
-          || productItem.getStatus() == ProductItem.ProductItemStatus.AVAILABLE) {
-        productItem.setStatus(ProductItem.ProductItemStatus.SOLD);
-        productItem.setSoldAt(LocalDateTime.now());
-
-        // Kích hoạt bảo hành
-        if (productItem.getWarrantyStartDate() == null) {
-          productItem.setWarrantyStartDate(today);
-          // warrantyMonths mặc định đã là 12 trong Entity
-          // Lấy từ OrderDetail nếu có giá trị riêng
-          OrderDetail od = oi.getOrderDetail();
-          if (od.getWarrantyMonths() != null) {
-            productItem.setWarrantyMonths(od.getWarrantyMonths());
-          }
-        }
-        productItemRepository.save(productItem);
-      }
-    }
-
-    if (!orderItems.isEmpty()) {
-      log.info("Đã kích hoạt bảo hành cho {} máy trong đơn hàng #{}", orderItems.size(), orderId);
-    }
+    imeiService.activateWarrantyForOrder(orderId);
   }
 
   // ─── Admin helper: hoàn coupon ────────────────────────────────────────────
   private void restoreCoupon(Order order) {
-    if (order.getCoupon() != null) {
-      Coupon coupon = order.getCoupon();
-      coupon.setUsedCount(Math.max(0, coupon.getUsedCount() - 1));
-      couponRepository.save(coupon);
+    if (order.getCouponCode() != null && !order.getCouponCode().isBlank()) {
+      couponService.decrementUsage(order.getCouponCode());
+    } else if (order.getCoupon() != null) {
+      couponService.decrementUsage(order.getCoupon().getCode());
     }
+  }
+
+  private List<CouponDto.CheckoutLineItem> buildLineItemsFromCart(List<CartItem> items) {
+    List<CouponDto.CheckoutLineItem> lineItems = new ArrayList<>();
+    for (CartItem item : items) {
+      ProductVariant variant = item.getVariant();
+      Product product = variant.getProduct();
+      BigDecimal price =
+          item.getUnitPrice() != null ? item.getUnitPrice() : variant.getPrice();
+      BigDecimal lineTotal = price.multiply(BigDecimal.valueOf(item.getQuantity()));
+
+      CouponDto.CheckoutLineItem line = new CouponDto.CheckoutLineItem();
+      line.setProductId(product.getId());
+      line.setProductTypeId(
+          product.getProductType() != null ? product.getProductType().getId() : null);
+      line.setLineTotal(lineTotal);
+      lineItems.add(line);
+    }
+    return lineItems;
   }
 
   // ─── Admin mapper: Order → AdminOrderResponse ─────────────────────────────

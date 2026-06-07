@@ -40,6 +40,7 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.servlet.http.Cookie;
 
 @RestController
+
 @RequestMapping("/api/auth")
 @CrossOrigin(origins = "http://localhost:5173")
 @Tag(name = "Xác thực (Authentication)", description = "Các API dành cho Đăng ký, Đăng nhập và Quản lý tài khoản")
@@ -204,6 +205,7 @@ public class AuthController {
 
       String email = payload.getEmail();
       String name = (String) payload.get("name");
+      String picture = (String) payload.get("picture");
       String googleId = payload.getSubject();
 
       User user = userRepository.findByEmail(email).orElse(null);
@@ -217,6 +219,9 @@ public class AuthController {
         user.setFullName(name);
         user.setProvider("GOOGLE");
         user.setOauthUid(googleId);
+        if (picture != null && !picture.isBlank()) {
+          user.setAvatarUrl(picture);
+        }
 
         Role userRole = roleRepository.findByName("CUSTOMER").orElseThrow(() -> new BadRequestException("Default CUSTOMER role not found"));
         user.setRoles(Collections.singleton(userRole));
@@ -227,8 +232,13 @@ public class AuthController {
         if (user.getProvider() == null) {
           user.setProvider("GOOGLE");
           user.setOauthUid(googleId);
-          userRepository.save(user);
         }
+        if (picture != null
+                && !picture.isBlank()
+                && (user.getAvatarUrl() == null || user.getAvatarUrl().isBlank())) {
+          user.setAvatarUrl(picture);
+        }
+        userRepository.save(user);
       }
 
       String jwt = tokenProvider.generateTokenFromUsername(user.getUsername());
@@ -236,6 +246,9 @@ public class AuthController {
       userRepository.save(user);
 
       UserDto.Response userResponse = rbacService.toUserResponse(user);
+      addressRepository.findByUserIdOrderByIsDefaultDescCreatedAtDesc(user.getId()).stream()
+              .findFirst()
+              .ifPresent(addr -> userResponse.setAddress(addr.getAddressDetail()));
       UserDto.LoginResponse loginResponse = new UserDto.LoginResponse(jwt, "Bearer", userResponse);
       return ResponseEntity.ok(ApiResponse.success("Google Login successful", loginResponse));
     } catch (BadRequestException e) {
@@ -288,6 +301,9 @@ public class AuthController {
       userRepository.save(user);
 
       UserDto.Response userResponse = rbacService.toUserResponse(user);
+      addressRepository.findByUserIdOrderByIsDefaultDescCreatedAtDesc(user.getId()).stream()
+              .findFirst()
+              .ifPresent(addr -> userResponse.setAddress(addr.getAddressDetail()));
       UserDto.LoginResponse loginResponse = new UserDto.LoginResponse(jwt, "Bearer", userResponse);
       return ResponseEntity.ok(ApiResponse.success("Facebook Login successful", loginResponse));
     } catch (BadRequestException e) {

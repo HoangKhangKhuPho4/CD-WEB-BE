@@ -24,7 +24,18 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
           + "WHERE v.product.id = :productId")
   List<ProductVariant> findByProductId(Integer productId);
 
+  @Query(
+      "SELECT DISTINCT v FROM ProductVariant v "
+          + "LEFT JOIN FETCH v.attributeValues av "
+          + "LEFT JOIN FETCH av.attribute "
+          + "WHERE v.product.id = :productId")
+  List<ProductVariant> findByProductIdWithAttributes(@Param("productId") Integer productId);
+
   java.util.Optional<ProductVariant> findBySkuCode(String skuCode);
+
+  boolean existsBySkuCodeAndIdNot(String skuCode, Integer id);
+
+  long countByIsActiveTrue();
 
   void deleteByProductId(Integer productId);
 
@@ -39,6 +50,13 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
           + "WHERE v.isActive = true AND v.stockQuantity <= v.lowStockThreshold "
           + "ORDER BY v.stockQuantity ASC")
   List<ProductVariant> findLowStockVariants();
+
+  @Query(
+      "SELECT v FROM ProductVariant v "
+          + "JOIN FETCH v.product p "
+          + "WHERE v.isActive = true "
+          + "ORDER BY v.stockQuantity ASC, p.name ASC")
+  List<ProductVariant> findAllActiveWithProduct();
 
   @Query(
       "SELECT COUNT(v) FROM ProductVariant v "

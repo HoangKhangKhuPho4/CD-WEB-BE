@@ -5,6 +5,8 @@ import com.cdweb.be.entity.Role;
 import com.cdweb.be.entity.User;
 import com.cdweb.be.exception.BadRequestException;
 import com.cdweb.be.exception.ResourceNotFoundException;
+import com.cdweb.be.entity.UserAddress;
+import com.cdweb.be.repository.AddressRepository;
 import com.cdweb.be.repository.RoleRepository;
 import com.cdweb.be.repository.UserRepository;
 import java.util.Collections;
@@ -22,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
   private final UserRepository userRepository;
+  private final AddressRepository addressRepository;
   private final RoleRepository roleRepository;
   private final ModelMapper modelMapper;
   private final PasswordEncoder passwordEncoder;
@@ -59,6 +62,22 @@ public class UserService {
                     .findByUsernameOrEmail(username, username)
                     .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
     return rbacService.toUserResponse(user);
+  }
+
+  @Transactional(readOnly = true)
+  public UserDto.Response getProfileByUsername(String username) {
+    UserDto.Response response = getUserByUsername(username);
+    enrichWithDefaultAddress(response);
+    return response;
+  }
+
+  private void enrichWithDefaultAddress(UserDto.Response response) {
+    if (response.getId() == null) {
+      return;
+    }
+    addressRepository.findByUserIdOrderByIsDefaultDescCreatedAtDesc(response.getId()).stream()
+            .findFirst()
+            .ifPresent(addr -> response.setAddress(addr.getAddressDetail()));
   }
 
   public UserDto.Response createUser(UserDto.CreateRequest request) {
@@ -118,8 +137,41 @@ public class UserService {
     }
 
     User updatedUser = userRepository.save(user);
+
+    if (updateRequest.getAddress() != null) {
+      syncDefaultAddress(updatedUser, updateRequest.getAddress());
+    }
+
     auditLogService.log("UPDATE_USER", "User", updatedUser.getId().toString(), "Updated user info");
-    return rbacService.toUserResponse(updatedUser);
+    UserDto.Response response = rbacService.toUserResponse(updatedUser);
+    enrichWithDefaultAddress(response);
+    return response;
+  }
+
+  private void syncDefaultAddress(User user, String addressDetail) {
+    var existing =
+            addressRepository.findByUserIdOrderByIsDefaultDescCreatedAtDesc(user.getId()).stream()
+                    .findFirst()
+                    .orElse(null);
+    if (existing != null) {
+      existing.setAddressDetail(addressDetail);
+      if (user.getFullName() != null) {
+        existing.setReceiverName(user.getFullName());
+      }
+      if (user.getPhone() != null) {
+        existing.setPhone(user.getPhone());
+      }
+      addressRepository.save(existing);
+      return;
+    }
+    UserAddress address = new UserAddress();
+    address.setUser(user);
+    address.setReceiverName(user.getFullName() != null ? user.getFullName() : user.getUsername());
+    address.setPhone(user.getPhone() != null ? user.getPhone() : "");
+    address.setAddressDetail(addressDetail);
+    address.setIsDefault(true);
+    address.setLabel("Nhà riêng");
+    addressRepository.save(address);
   }
 
   // Đã sửa: Integer -> Long, setStatus -> setEnabled

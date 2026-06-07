@@ -1,7 +1,10 @@
 package com.cdweb.be.repository;
 
 import com.cdweb.be.entity.WarrantyTicket;
+import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -22,12 +25,31 @@ public interface WarrantyTicketRepository extends JpaRepository<WarrantyTicket, 
           + "       LOWER(p.imei) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
           + "       LOWER(p.serialNumber) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
           + "       LOWER(t.customerName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
-          + "       LOWER(t.customerPhone) LIKE LOWER(CONCAT('%', :keyword, '%')))"
-          + "AND (:status IS NULL OR t.status = :status)")
+          + "       LOWER(t.customerPhone) LIKE LOWER(CONCAT('%', :keyword, '%'))) "
+          + "AND (:status IS NULL OR t.status = :status) "
+          + "AND (:fromDate IS NULL OR t.receivedAt >= :fromDate) "
+          + "AND (:toDate IS NULL OR t.receivedAt < :toDate)")
   Page<WarrantyTicket> searchTickets(
       @Param("keyword") String keyword,
       @Param("status") WarrantyTicket.TicketStatus status,
+      @Param("fromDate") LocalDateTime fromDate,
+      @Param("toDate") LocalDateTime toDate,
       Pageable pageable);
+
+  Optional<WarrantyTicket> findByTicketCode(String ticketCode);
+
+  long countByStatus(WarrantyTicket.TicketStatus status);
+
+  long countByProductItemIdAndStatusIn(
+      Integer productItemId, Collection<WarrantyTicket.TicketStatus> statuses);
+
+  @Query(
+      "SELECT t FROM WarrantyTicket t "
+          + "JOIN FETCH t.productItem p "
+          + "LEFT JOIN FETCH p.variant v "
+          + "LEFT JOIN FETCH v.product prod "
+          + "WHERE t.ticketCode = :ticketCode")
+  Optional<WarrantyTicket> findByTicketCodeWithDetails(@Param("ticketCode") String ticketCode);
 
   @Query("SELECT MAX(t.ticketCode) FROM WarrantyTicket t WHERE t.ticketCode LIKE :prefix%")
   String findMaxTicketCodeWithPrefix(@Param("prefix") String prefix);

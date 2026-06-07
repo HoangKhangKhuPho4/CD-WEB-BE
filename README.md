@@ -195,6 +195,21 @@ npm run dev
 Storefront: **http://localhost:3000**  
 Admin: **http://localhost:3000/admin**
 
+### Bước 5 — Ngrok (test VNPay / MoMo trên local)
+
+Dev hàng ngày dùng `http://localhost:8080` — **không bắt buộc** ngrok.
+
+Khi cần test **thanh toán VNPay / MoMo** (Return URL & callback từ internet), xem hướng dẫn chi tiết:
+
+**[docs/NGROK_SETUP.md](docs/NGROK_SETUP.md)**
+
+Tóm tắt:
+
+1. `ngrok config add-authtoken "..."` (token từ [dashboard ngrok](https://dashboard.ngrok.com/get-started/your-authtoken))
+2. Chạy Backend → `ngrok http 8080`
+3. Sửa `app.backend-url` trong `application.yml` → restart Backend
+4. Giữ terminal ngrok mở suốt phiên test
+
 ### Biến môi trường
 
 | Repo | File mẫu | File thật (gitignore) |

@@ -18,6 +18,7 @@ import com.cdweb.be.service.WarrantyService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -205,6 +206,115 @@ public class WarrantyServiceImpl implements WarrantyService {
         .build();
   }
 
+  @Override
+  @Transactional(readOnly = true)
+  public WarrantyDto.StatsResponse getTicketStats() {
+    return WarrantyDto.StatsResponse.builder()
+        .total(warrantyTicketRepository.count())
+        .pending(warrantyTicketRepository.countByStatus(WarrantyTicket.TicketStatus.PENDING))
+        .inProgress(warrantyTicketRepository.countByStatus(WarrantyTicket.TicketStatus.IN_PROGRESS))
+        .completed(warrantyTicketRepository.countByStatus(WarrantyTicket.TicketStatus.COMPLETED))
+        .cancelled(warrantyTicketRepository.countByStatus(WarrantyTicket.TicketStatus.CANCELLED))
+        .returned(warrantyTicketRepository.countByStatus(WarrantyTicket.TicketStatus.RETURNED))
+        .build();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public WarrantyDto.ValidateTicketResponse validateTicket(WarrantyDto.TicketRequest request) {
+    try {
+      validateTicketRequest(request);
+    } catch (BadRequestException e) {
+      return WarrantyDto.ValidateTicketResponse.builder()
+          .valid(false)
+          .message(e.getMessage())
+          .deviceFound(false)
+          .warrantyValid(false)
+          .hasActiveTicket(false)
+          .build();
+    }
+
+    Optional<ProductItem> itemOpt =
+        productItemRepository.findByImeiOrSerialNumber(
+            request.getImeiOrSerial(), request.getImeiOrSerial());
+    if (itemOpt.isEmpty()) {
+      return WarrantyDto.ValidateTicketResponse.builder()
+          .valid(false)
+          .message("Không tìm thấy thiết bị với IMEI/Serial đã nhập.")
+          .deviceFound(false)
+          .warrantyValid(false)
+          .hasActiveTicket(false)
+          .build();
+    }
+
+    ProductItem item = itemOpt.get();
+    WarrantyDto.Response warranty = checkWarranty(request.getImeiOrSerial());
+    Optional<WarrantyTicket> active = findActiveTicket(item.getId());
+
+    boolean hasActive = active.isPresent();
+    boolean valid = !hasActive;
+
+    return WarrantyDto.ValidateTicketResponse.builder()
+        .valid(valid)
+        .message(
+            hasActive
+                ? "Thiết bị đang có phiếu bảo hành chưa hoàn tất: " + active.get().getTicketCode()
+                : warranty.isValid()
+                    ? "Có thể tạo phiếu bảo hành"
+                    : "Thiết bị tìm thấy nhưng bảo hành có thể đã hết hạn — vẫn có thể tiếp nhận theo chính sách")
+        .deviceFound(true)
+        .warrantyValid(warranty.isValid())
+        .hasActiveTicket(hasActive)
+        .activeTicketCode(active.map(WarrantyTicket::getTicketCode).orElse(null))
+        .warranty(warranty)
+        .build();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public byte[] exportTicketsCsv(
+      String keyword, String status, LocalDate fromDate, LocalDate toDate) {
+    Page<WarrantyDto.TicketResponse> page =
+        getAllTickets(keyword, status, fromDate, toDate, Pageable.unpaged());
+    StringBuilder sb = new StringBuilder();
+    sb.append(
+        "id,ticketCode,imei,productName,customerName,customerPhone,status,repairCost,receivedAt,resolvedAt,returnedAt\n");
+    for (WarrantyDto.TicketResponse row : page.getContent()) {
+      sb.append(row.getId()).append(",");
+      sb.append(csvEscape(row.getTicketCode())).append(",");
+      sb.append(csvEscape(row.getImei())).append(",");
+      sb.append(csvEscape(row.getProductName())).append(",");
+      sb.append(csvEscape(row.getCustomerName())).append(",");
+      sb.append(csvEscape(row.getCustomerPhone())).append(",");
+      sb.append(row.getStatus()).append(",");
+      sb.append(row.getRepairCost() != null ? row.getRepairCost() : "").append(",");
+      sb.append(row.getReceivedAt()).append(",");
+      sb.append(row.getResolvedAt()).append(",");
+      sb.append(row.getReturnedAt()).append("\n");
+    }
+    return sb.toString().getBytes(StandardCharsets.UTF_8);
+  }
+
+  private String csvEscape(String value) {
+    if (value == null) return "";
+    if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+      return "\"" + value.replace("\"", "\"\"") + "\"";
+    }
+    return value;
+  }
+
+  private Optional<WarrantyTicket> findActiveTicket(Integer productItemId) {
+    List<WarrantyTicket> tickets =
+        warrantyTicketRepository.findByProductItemIdOrderByReceivedAtDesc(productItemId);
+    return tickets.stream()
+        .filter(
+            t ->
+                t.getStatus() == WarrantyTicket.TicketStatus.PENDING
+                    || t.getStatus() == WarrantyTicket.TicketStatus.IN_PROGRESS
+                    || t.getStatus() == WarrantyTicket.TicketStatus.COMPLETED)
+        .findFirst();
+  }
+
   // =========================================================================
   // TICKET MANAGEMENT (RMA)
   // =========================================================================
@@ -252,6 +362,11 @@ public class WarrantyServiceImpl implements WarrantyService {
                     new ResourceNotFoundException(
                         "ProductItem", "IMEI/Serial", request.getImeiOrSerial()));
 
+    if (findActiveTicket(productItem.getId()).isPresent()) {
+      throw new BadRequestException(
+          "Thiết bị đang có phiếu bảo hành chưa hoàn tất. Vui lòng hoàn tất hoặc hủy phiếu cũ trước.");
+    }
+
     productItem.setStatus(ProductItem.ProductItemStatus.IN_REPAIR);
     productItemRepository.save(productItem);
 
@@ -292,12 +407,26 @@ public class WarrantyServiceImpl implements WarrantyService {
   }
 
   @Override
+  public WarrantyDto.TicketResponse getTicketByCode(String ticketCode) {
+    WarrantyTicket ticket =
+        warrantyTicketRepository
+            .findByTicketCodeWithDetails(ticketCode)
+            .orElseThrow(
+                () -> new ResourceNotFoundException("WarrantyTicket", "ticketCode", ticketCode));
+    return mapToTicketResponse(ticket);
+  }
+
+  @Override
   public WarrantyDto.TicketResponse updateTicketStatus(
       Integer id, WarrantyDto.TicketUpdateAdminRequest request) {
     WarrantyTicket ticket =
         warrantyTicketRepository
             .findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("WarrantyTicket", "id", id));
+
+    if (request.getStatus() == null || request.getStatus().isBlank()) {
+      throw new BadRequestException("Trạng thái phiếu bảo hành không được để trống");
+    }
 
     WarrantyTicket.TicketStatus newStatus;
     try {
@@ -345,18 +474,22 @@ public class WarrantyServiceImpl implements WarrantyService {
 
   @Override
   public Page<WarrantyDto.TicketResponse> getAllTickets(
-      String keyword, String status, Pageable pageable) {
+      String keyword, String status, LocalDate fromDate, LocalDate toDate, Pageable pageable) {
     WarrantyTicket.TicketStatus ticketStatus = null;
     if (status != null && !status.trim().isEmpty()) {
       try {
         ticketStatus = WarrantyTicket.TicketStatus.valueOf(status.trim().toUpperCase());
       } catch (IllegalArgumentException e) {
-        ticketStatus = null; // Reset to null to ensure all tickets are returned on invalid input
+        ticketStatus = null;
       }
     }
 
+    String kw = keyword == null || keyword.isBlank() ? null : keyword.trim();
+    LocalDateTime from = fromDate != null ? fromDate.atStartOfDay() : null;
+    LocalDateTime to = toDate != null ? toDate.plusDays(1).atStartOfDay() : null;
+
     Page<WarrantyTicket> tickets =
-        warrantyTicketRepository.searchTickets(keyword, ticketStatus, pageable);
+        warrantyTicketRepository.searchTickets(kw, ticketStatus, from, to, pageable);
     return tickets.map(this::mapToTicketResponse);
   }
 

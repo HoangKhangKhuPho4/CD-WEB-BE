@@ -5,7 +5,7 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3306/cd_web
     username: root
-    password: "12345"
+    password: ""
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -52,17 +52,21 @@ jwt:
   expiration: 86400000         # 24 giờ (ms)
   refresh-expiration: 604800000 # 7 ngày (ms)
 
-# ── Google OAuth2 (Từ bản cũ) ──
+# ── Google OAuth2 (Cấu Hình Chuyên Đề Web) ──
+# FE phải dùng cùng Client ID (NEXT_PUBLIC_GOOGLE_CLIENT_ID) để idToken verify khớp BE.
 google:
   client:
-    id: 573198951854-46toem8hgic9va247hthtaem89f3alr7.apps.googleusercontent.com
+    id: ${GOOGLE_CLIENT_ID:91702937442-68dtl399821hm38ur4pnnsqmuhrj555i.apps.googleusercontent.com}
+    secret: ${GOOGLE_CLIENT_SECRET:}
 
-# ── App Settings (ĐỔI LINK NGROK Ở DUY NHẤT CHỖ NÀY) ──
+# ── App Settings ──
+# backend-url: chỉ dùng cho VNPay/MoMo callback (đổi khi chạy ngrok).
+# server.url: URL ảnh trong API JSON — dev local dùng localhost, không gắn ngrok.
 app:
   frontend-url: "http://localhost:3000"
-  backend-url: "https://oxygenizable-beamiest-julianna.ngrok-free.dev" # <--- CHỈ CẦN THAY NGROK MỚI Ở DÒNG NÀY
+  backend-url: "https://c155-116-111-185-18.ngrok-free.app"
   server:
-    url: "${app.backend-url}"
+    url: "http://localhost:8080"
   ai:
     base-url: "http://localhost:5000"
   password-reset-expiry: 3600000

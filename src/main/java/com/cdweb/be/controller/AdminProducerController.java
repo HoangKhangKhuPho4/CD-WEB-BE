@@ -15,7 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-/** Admin API — Quản lý Nhà sản xuất / Thương hiệu. */
+/** Admin API — Quản lý Thương hiệu / Nhà sản xuất (đủ scenario kiểm thử). */
 @RestController
 @RequestMapping("/api/admin/producers")
 @PreAuthorize("hasAnyAuthority('PRODUCT_MANAGE', 'PRODUCT_CREATE', 'PRODUCT_UPDATE', 'ROLE_ADMIN')")
@@ -25,14 +25,15 @@ public class AdminProducerController {
 
   private final ProducerService producerService;
 
-  /** GET /api/admin/producers Danh sách nhà sản xuất có phân trang và tìm kiếm. */
   @GetMapping
   public ResponseEntity<ApiResponse<Page<ProducerDto.Response>>> getAllProducers(
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "10") int size,
       @RequestParam(required = false) String keyword,
       @RequestParam(required = false) Boolean isActive,
-      @RequestParam(defaultValue = "id") String sortBy,
+      @RequestParam(required = false) String country,
+      @RequestParam(required = false) Boolean hasProducts,
+      @RequestParam(defaultValue = "createdAt") String sortBy,
       @RequestParam(defaultValue = "desc") String sortDir) {
     Sort sort =
         sortDir.equalsIgnoreCase("desc")
@@ -40,27 +41,57 @@ public class AdminProducerController {
             : Sort.by(sortBy).ascending();
     Pageable pageable = PageRequest.of(page, size, sort);
     Page<ProducerDto.Response> result =
-        producerService.getAllProducers(pageable, keyword, isActive);
+        producerService.getAllProducers(pageable, keyword, isActive, country, hasProducts);
     return ResponseEntity.ok(ApiResponse.success("Lấy danh sách nhà sản xuất thành công", result));
   }
 
-  /** GET /api/admin/producers/all Trả về danh sách rút gọn (Slim) để populate dropdown. */
-  @GetMapping("/all")
-  public ResponseEntity<ApiResponse<List<ProducerDto.SlimResponse>>> getAllProducersForDropdown() {
-    List<ProducerDto.SlimResponse> producers = producerService.getAllProducersSlim(null);
+  @GetMapping("/stats")
+  public ResponseEntity<ApiResponse<ProducerDto.AdminStatsResponse>> getStats() {
     return ResponseEntity.ok(
-        ApiResponse.success("Lấy danh sách nhà sản xuất thành công", producers));
+        ApiResponse.success("Lấy thống kê thương hiệu thành công", producerService.getAdminStats()));
   }
 
-  /** GET /api/admin/producers/{id} Xem chi tiết một nhà sản xuất. */
-  @GetMapping("/{id}")
+  @GetMapping("/all")
+  public ResponseEntity<ApiResponse<List<ProducerDto.SlimResponse>>> getAllProducersForDropdown(
+      @RequestParam(required = false) Boolean isActive) {
+    return ResponseEntity.ok(
+        ApiResponse.success(
+            "Lấy danh sách nhà sản xuất thành công", producerService.getAllProducersSlim(isActive)));
+  }
+
+  @GetMapping("/code/{code}")
+  public ResponseEntity<ApiResponse<ProducerDto.Response>> getProducerByCode(
+      @PathVariable String code) {
+    return ResponseEntity.ok(
+        ApiResponse.success("Chi tiết nhà sản xuất", producerService.getProducerByCode(code)));
+  }
+
+  @PostMapping("/validate-code")
+  public ResponseEntity<ApiResponse<ProducerDto.ValidateCodeResponse>> validateCode(
+      @Valid @RequestBody ProducerDto.ValidateCodeRequest request) {
+    return ResponseEntity.ok(
+        ApiResponse.success("Kiểm tra mã thành công", producerService.validateCode(request)));
+  }
+
+  @GetMapping("/{id:\\d+}")
   public ResponseEntity<ApiResponse<ProducerDto.Response>> getProducerById(
       @PathVariable Integer id) {
-    ProducerDto.Response producer = producerService.getProducerById(id);
-    return ResponseEntity.ok(ApiResponse.success("Chi tiết nhà sản xuất", producer));
+    return ResponseEntity.ok(
+        ApiResponse.success("Chi tiết nhà sản xuất", producerService.getProducerById(id)));
   }
 
-  /** POST /api/admin/producers Tạo mới nhà sản xuất. */
+  @GetMapping("/{id:\\d+}/products")
+  public ResponseEntity<ApiResponse<Page<ProducerDto.ProductSummary>>> getProducerProducts(
+      @PathVariable Integer id,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "10") int size) {
+    Pageable pageable = PageRequest.of(page, size, Sort.by("name").ascending());
+    return ResponseEntity.ok(
+        ApiResponse.success(
+            "Lấy sản phẩm theo thương hiệu thành công",
+            producerService.getProducerProducts(id, pageable)));
+  }
+
   @PostMapping
   public ResponseEntity<ApiResponse<ProducerDto.Response>> createProducer(
       @Valid @RequestBody ProducerDto.Request request) {
@@ -69,28 +100,37 @@ public class AdminProducerController {
         .body(ApiResponse.success("Tạo nhà sản xuất thành công", created));
   }
 
-  /** PUT /api/admin/producers/{id} Cập nhật thông tin nhà sản xuất. */
-  @PutMapping("/{id}")
+  @PutMapping("/{id:\\d+}")
   public ResponseEntity<ApiResponse<ProducerDto.Response>> updateProducer(
-      @PathVariable Integer id, @Valid @RequestBody ProducerDto.Request request) {
-    ProducerDto.Response updated = producerService.updateProducer(id, request);
-    return ResponseEntity.ok(ApiResponse.success("Cập nhật nhà sản xuất thành công", updated));
+      @PathVariable Integer id, @Valid @RequestBody ProducerDto.UpdateRequest request) {
+    return ResponseEntity.ok(
+        ApiResponse.success("Cập nhật nhà sản xuất thành công", producerService.updateProducer(id, request)));
   }
 
-  /**
-   * DELETE /api/admin/producers/{id} Xóa nhà sản xuất (Xóa vĩnh viễn hoặc vô hiệu hóa tùy theo ràng
-   * buộc dữ liệu).
-   */
-  @DeleteMapping("/{id}")
+  @PatchMapping("/{id:\\d+}/toggle-status")
+  public ResponseEntity<ApiResponse<ProducerDto.Response>> toggleStatus(@PathVariable Integer id) {
+    return ResponseEntity.ok(
+        ApiResponse.success("Cập nhật trạng thái thành công", producerService.toggleStatus(id)));
+  }
+
+  @PatchMapping("/bulk-status")
+  public ResponseEntity<ApiResponse<List<ProducerDto.Response>>> bulkUpdateStatus(
+      @Valid @RequestBody ProducerDto.BulkStatusRequest request) {
+    return ResponseEntity.ok(
+        ApiResponse.success(
+            "Cập nhật trạng thái hàng loạt thành công",
+            producerService.bulkUpdateStatus(request)));
+  }
+
+  @DeleteMapping("/{id:\\d+}")
   public ResponseEntity<ApiResponse<Void>> deleteProducer(@PathVariable Integer id) {
     producerService.deleteProducer(id);
     return ResponseEntity.ok(ApiResponse.success("Xóa nhà sản xuất thành công", null));
   }
 
-  /** PATCH /api/admin/producers/{id}/toggle-status Bật/Tắt trạng thái hoạt động. */
-  @PatchMapping("/{id}/toggle-status")
-  public ResponseEntity<ApiResponse<ProducerDto.Response>> toggleStatus(@PathVariable Integer id) {
-    ProducerDto.Response updated = producerService.toggleStatus(id);
-    return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái thành công", updated));
+  @DeleteMapping("/{id:\\d+}/hard")
+  public ResponseEntity<ApiResponse<Void>> hardDeleteProducer(@PathVariable Integer id) {
+    producerService.hardDeleteProducer(id);
+    return ResponseEntity.ok(ApiResponse.success("Xóa cứng nhà sản xuất thành công", null));
   }
 }

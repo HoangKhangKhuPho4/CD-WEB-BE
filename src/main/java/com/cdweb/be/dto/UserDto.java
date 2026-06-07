@@ -72,6 +72,11 @@ public class UserDto {
     private String gender;
     private String address;
 
+    /** LOCAL, GOOGLE, FACEBOOK — dùng cho FE ẩn đổi mật khẩu OAuth. */
+    private String provider;
+
+    private String avatarUrl;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;
 

@@ -37,8 +37,16 @@ public class ProductController {
     return ResponseEntity.ok(ApiResponse.success("Products retrieved successfully", products));
   }
 
+  @GetMapping("/slug/{slug}")
+  @Operation(summary = "Chi tiết sản phẩm theo slug")
+  public ResponseEntity<ApiResponse<ProductDto.Response>> getProductBySlug(
+      @PathVariable("slug") String slug) {
+    ProductDto.Response product = productService.getProductBySlug(slug);
+    return ResponseEntity.ok(ApiResponse.success("Product retrieved successfully", product));
+  }
+
   @GetMapping("/{id}")
-  @Operation(summary = "Xem chi tiết một sản phẩm", description = "Lấy thông tin đầy đủ của sản phẩm theo ID")
+  @Operation(summary = "Xem chi tiết một sản phẩm", description = "Chỉ trả về sản phẩm đang ACTIVE")
   public ResponseEntity<ApiResponse<ProductDto.Response>> getProductById(
       @PathVariable("id") Integer id) {
     ProductDto.Response product = productService.getProductById(id.longValue());

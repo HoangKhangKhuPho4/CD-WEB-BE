@@ -11,8 +11,12 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class InventoryStatDto {
   private Integer variantId;
+  private String productName;
   private String variantName;
   private String skuCode;
   private Integer stockQuantity;
+  private Integer lowStockThreshold;
+  private Double unitPrice;
+  private Double stockValue;
   private String status;
 }

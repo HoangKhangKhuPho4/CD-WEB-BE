@@ -13,6 +13,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,7 +23,6 @@ public class ReviewController {
 
   @Autowired private ReviewService reviewService;
 
-  // ─── GET /api/reviews?product_id=1 — Danh sách đánh giá theo sản phẩm ───
   @GetMapping
   public ResponseEntity<ApiResponse<Page<ReviewDto.Response>>> getProductReviews(
       @RequestParam(name = "product_id") Integer productId,
@@ -39,7 +39,6 @@ public class ReviewController {
     return ResponseEntity.ok(ApiResponse.success("Reviews retrieved successfully", reviews));
   }
 
-  // ─── GET /api/reviews/summary?product_id=1 — Thống kê đánh giá ──────────
   @GetMapping("/summary")
   public ResponseEntity<ApiResponse<ReviewDto.ReviewSummary>> getReviewSummary(
       @RequestParam(name = "product_id") Integer productId) {
@@ -48,7 +47,6 @@ public class ReviewController {
     return ResponseEntity.ok(ApiResponse.success("Review summary retrieved successfully", summary));
   }
 
-  // ─── GET /api/reviews/recent — Đánh giá mới (trang chủ) ───────────────────
   @GetMapping("/recent")
   public ResponseEntity<ApiResponse<List<ReviewDto.Response>>> getRecentReviews(
       @RequestParam(defaultValue = "8") int size) {
@@ -56,7 +54,27 @@ public class ReviewController {
     return ResponseEntity.ok(ApiResponse.success("Recent reviews retrieved successfully", reviews));
   }
 
-  // ─── GET /api/reviews/my — Đánh giá của tôi ─────────────────────────────
+  @GetMapping("/eligibility")
+  @PreAuthorize("isAuthenticated()")
+  public ResponseEntity<ApiResponse<ReviewDto.EligibilityResponse>> getEligibility(
+      @RequestParam(name = "product_id") Integer productId) {
+    String username = SecurityContextHolder.getContext().getAuthentication().getName();
+    ReviewDto.EligibilityResponse eligibility =
+        reviewService.getReviewEligibility(productId, username);
+    return ResponseEntity.ok(ApiResponse.success("Review eligibility retrieved", eligibility));
+  }
+
+  @GetMapping("/reviewable")
+  @PreAuthorize("isAuthenticated()")
+  public ResponseEntity<ApiResponse<Page<ReviewDto.ReviewableItem>>> getReviewableProducts(
+      @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size) {
+    String username = SecurityContextHolder.getContext().getAuthentication().getName();
+    Pageable pageable = PageRequest.of(page, size, Sort.by("deliveredAt").descending());
+    Page<ReviewDto.ReviewableItem> items =
+        reviewService.getReviewableProducts(username, pageable);
+    return ResponseEntity.ok(ApiResponse.success("Reviewable products retrieved", items));
+  }
+
   @GetMapping("/my")
   @PreAuthorize("isAuthenticated()")
   public ResponseEntity<ApiResponse<Page<ReviewDto.Response>>> getMyReviews(
@@ -68,7 +86,17 @@ public class ReviewController {
     return ResponseEntity.ok(ApiResponse.success("My reviews retrieved successfully", reviews));
   }
 
-  // ─── POST /api/reviews — Tạo đánh giá mới ──────────────────────────────
+  @GetMapping("/{id}")
+  public ResponseEntity<ApiResponse<ReviewDto.Response>> getReviewById(@PathVariable Integer id) {
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    String username =
+        auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getName())
+            ? auth.getName()
+            : null;
+    ReviewDto.Response review = reviewService.getReviewById(id, username);
+    return ResponseEntity.ok(ApiResponse.success("Review retrieved successfully", review));
+  }
+
   @PostMapping
   @PreAuthorize("isAuthenticated()")
   public ResponseEntity<ApiResponse<ReviewDto.Response>> createReview(
@@ -77,10 +105,9 @@ public class ReviewController {
     String username = SecurityContextHolder.getContext().getAuthentication().getName();
     ReviewDto.Response review = reviewService.createReview(request, username);
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(ApiResponse.success("Review created successfully", review));
+        .body(ApiResponse.success("Đánh giá đã gửi — chờ duyệt", review));
   }
 
-  // ─── PUT /api/reviews/{id} — Cập nhật đánh giá của mình ────────────────
   @PutMapping("/{id}")
   @PreAuthorize("isAuthenticated()")
   public ResponseEntity<ApiResponse<ReviewDto.Response>> updateReview(
@@ -88,10 +115,10 @@ public class ReviewController {
 
     String username = SecurityContextHolder.getContext().getAuthentication().getName();
     ReviewDto.Response review = reviewService.updateReview(id, request, username);
-    return ResponseEntity.ok(ApiResponse.success("Review updated successfully", review));
+    return ResponseEntity.ok(
+        ApiResponse.success("Đánh giá đã cập nhật — chờ duyệt lại", review));
   }
 
-  // ─── DELETE /api/reviews/{id} — Xóa đánh giá của mình ──────────────────
   @DeleteMapping("/{id}")
   @PreAuthorize("isAuthenticated()")
   public ResponseEntity<ApiResponse<Void>> deleteReview(@PathVariable Integer id) {
@@ -100,7 +127,6 @@ public class ReviewController {
     return ResponseEntity.ok(ApiResponse.success("Review deleted successfully", null));
   }
 
-  // ─── POST /api/reviews/{id}/helpful — Đánh dấu hữu ích ────────────────
   @PostMapping("/{id}/helpful")
   public ResponseEntity<ApiResponse<ReviewDto.Response>> markHelpful(@PathVariable Integer id) {
     ReviewDto.Response review = reviewService.markHelpful(id);

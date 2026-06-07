@@ -6,18 +6,25 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface ProductItemRepository extends JpaRepository<ProductItem, Integer> {
+public interface ProductItemRepository
+    extends JpaRepository<ProductItem, Integer>, JpaSpecificationExecutor<ProductItem> {
   Optional<ProductItem> findByImeiOrSerialNumber(String imei, String serialNumber);
 
   List<ProductItem> findByVariantIdAndStatus(
       Integer variantId, ProductItem.ProductItemStatus status);
 
   long countByVariantIdAndStatus(Integer variantId, ProductItem.ProductItemStatus status);
+
+  long countByStatus(ProductItem.ProductItemStatus status);
+
+  @Query("SELECT COUNT(DISTINCT oi.productItem.id) FROM OrderItem oi")
+  long countDistinctLinkedToOrders();
 
   @Query(
       """
