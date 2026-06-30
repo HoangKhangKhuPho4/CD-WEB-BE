@@ -15,7 +15,7 @@ public final class ProductItemStatusTransitions {
   static {
     ALLOWED.put(
         ProductItemStatus.AVAILABLE,
-        Set.of(ProductItemStatus.RESERVED, ProductItemStatus.DEFECTIVE));
+        Set.of(ProductItemStatus.RESERVED, ProductItemStatus.DEFECTIVE, ProductItemStatus.MISSING));
     ALLOWED.put(
         ProductItemStatus.RESERVED,
         Set.of(ProductItemStatus.AVAILABLE, ProductItemStatus.SOLD));
@@ -27,6 +27,7 @@ public final class ProductItemStatusTransitions {
         ProductItemStatus.RETURNED,
         Set.of(ProductItemStatus.AVAILABLE, ProductItemStatus.DEFECTIVE));
     ALLOWED.put(ProductItemStatus.DEFECTIVE, Set.of(ProductItemStatus.AVAILABLE));
+    ALLOWED.put(ProductItemStatus.MISSING, Set.of(ProductItemStatus.AVAILABLE, ProductItemStatus.DEFECTIVE));
   }
 
   private ProductItemStatusTransitions() {}

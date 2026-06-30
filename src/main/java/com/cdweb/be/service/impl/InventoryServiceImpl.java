@@ -7,6 +7,8 @@ import com.cdweb.be.dto.ImportStockRequest;
 import com.cdweb.be.dto.InventoryDto;
 import com.cdweb.be.dto.InventoryResponseDto;
 import com.cdweb.be.dto.InventoryStatDto;
+import com.cdweb.be.dto.InventorySummaryDto;
+import com.cdweb.be.dto.PendingReturnItemDto;
 import com.cdweb.be.dto.ProductItemListDto;
 import com.cdweb.be.dto.ReturnQuantityRequest;
 import com.cdweb.be.dto.ReturnStockRequest;
@@ -86,9 +88,7 @@ public class InventoryServiceImpl implements InventoryService {
       history.setReferenceType("IMPORT_BATCH");
       history.setReferenceId(batchRef);
       history.setReason(
-          request.getNote() != null && !request.getNote().isEmpty()
-              ? request.getNote()
-              : "Nhập hàng từ: " + request.getSupplier());
+          buildImportReason(request, itemDto));
       history.setUser(currentUser);
       inventoryRepository.save(history);
     }
@@ -116,18 +116,19 @@ public class InventoryServiceImpl implements InventoryService {
                     new ResourceNotFoundException(
                         "ProductVariant", "id", request.getVariantId().toString()));
 
-    variant.setStockQuantity(variant.getStockQuantity() + request.getQuantity());
-    productVariantRepository.save(variant);
+    boolean defective = Boolean.TRUE.equals(request.getIsDefective());
+    if (!defective) {
+      variant.setStockQuantity(variant.getStockQuantity() + request.getQuantity());
+      productVariantRepository.save(variant);
+    }
 
     String reason =
         request.getReason() != null && !request.getReason().isEmpty()
             ? request.getReason()
-            : Boolean.TRUE.equals(request.getIsDefective())
-                ? "Trả hàng lỗi (theo số lượng)"
-                : "Trả hàng (theo số lượng)";
+            : defective ? "Trả hàng lỗi (theo số lượng — không cộng tồn bán)" : "Trả hàng (theo số lượng)";
 
     Inventory history = new Inventory();
-    history.setTransactionType(TransactionType.RETURN);
+    history.setTransactionType(defective ? TransactionType.ADJUSTMENT : TransactionType.RETURN);
     history.setQuantity(request.getQuantity());
     history.setVariant(variant);
     history.setReason(reason);
@@ -177,6 +178,7 @@ public class InventoryServiceImpl implements InventoryService {
   public InventoryDto.ValidateImportResponse validateImport(ImportStockRequest request) {
     List<InventoryDto.ValidateImportItemResult> results = new ArrayList<>();
     boolean allValid = true;
+    double estimatedTotal = 0.0;
 
     for (ImportStockItemDto item : request.getItems()) {
       if (item.getVariantId() == null) {
@@ -200,6 +202,18 @@ public class InventoryServiceImpl implements InventoryService {
         allValid = false;
         continue;
       }
+      if (item.getUnitCost() != null && item.getUnitCost() < 0) {
+        results.add(
+            InventoryDto.ValidateImportItemResult.builder()
+                .variantId(item.getVariantId())
+                .requestedQuantity(item.getQuantity())
+                .unitCost(item.getUnitCost())
+                .valid(false)
+                .message("Đơn giá nhập không được âm")
+                .build());
+        allValid = false;
+        continue;
+      }
 
       var opt = productVariantRepository.findById(item.getVariantId());
       if (opt.isEmpty()) {
@@ -207,6 +221,7 @@ public class InventoryServiceImpl implements InventoryService {
             InventoryDto.ValidateImportItemResult.builder()
                 .variantId(item.getVariantId())
                 .requestedQuantity(item.getQuantity())
+                .unitCost(item.getUnitCost())
                 .valid(false)
                 .message("Variant không tồn tại")
                 .build());
@@ -215,6 +230,9 @@ public class InventoryServiceImpl implements InventoryService {
       }
 
       ProductVariant v = opt.get();
+      double unitCost = item.getUnitCost() != null ? item.getUnitCost() : 0.0;
+      double lineTotal = unitCost * item.getQuantity();
+      estimatedTotal += lineTotal;
       results.add(
           InventoryDto.ValidateImportItemResult.builder()
               .variantId(v.getId())
@@ -223,22 +241,109 @@ public class InventoryServiceImpl implements InventoryService {
               .variantName(v.getVariantName())
               .currentStock(v.getStockQuantity())
               .requestedQuantity(item.getQuantity())
+              .unitCost(item.getUnitCost())
+              .lineTotal(lineTotal > 0 ? Math.round(lineTotal * 100.0) / 100.0 : null)
               .valid(true)
               .message("OK")
               .build());
     }
 
-    return InventoryDto.ValidateImportResponse.builder().allValid(allValid).results(results).build();
+    return InventoryDto.ValidateImportResponse.builder()
+        .allValid(allValid)
+        .results(results)
+        .supplier(request.getSupplier())
+        .note(request.getNote())
+        .estimatedTotalValue(
+            estimatedTotal > 0 ? Math.round(estimatedTotal * 100.0) / 100.0 : null)
+        .build();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public InventorySummaryDto getInventorySummary(int lowStockThreshold) {
+    int low = 0;
+    int out = 0;
+    for (InventoryStatDto row : getInventoryStats(lowStockThreshold)) {
+      int qty = row.getStockQuantity() != null ? row.getStockQuantity() : 0;
+      int threshold =
+          row.getLowStockThreshold() != null ? row.getLowStockThreshold() : lowStockThreshold;
+      if (qty <= 0 || "OUT_OF_STOCK".equals(row.getStatus())) {
+        out++;
+      } else if (qty <= threshold || "LOW_STOCK".equals(row.getStatus())) {
+        low++;
+      }
+    }
+    long importCount =
+        inventoryRepository.countByTransactionType(Inventory.TransactionType.IMPORT);
+    return InventorySummaryDto.builder()
+        .lowStockCount(low)
+        .outOfStockCount(out)
+        .importTransactionCount(importCount)
+        .build();
+  }
+
+  private String buildImportReason(ImportStockRequest request, ImportStockItemDto itemDto) {
+    StringBuilder sb = new StringBuilder();
+    if (request.getNote() != null && !request.getNote().isBlank()) {
+      sb.append(request.getNote().trim());
+    } else if (request.getSupplier() != null && !request.getSupplier().isBlank()) {
+      sb.append("Nhập hàng từ: ").append(request.getSupplier().trim());
+    } else {
+      sb.append("Nhập kho thủ công");
+    }
+    if (itemDto.getUnitCost() != null && itemDto.getUnitCost() > 0) {
+      if (!sb.isEmpty()) sb.append(" | ");
+      sb.append("Đơn giá: ").append(itemDto.getUnitCost());
+    }
+    return sb.toString();
   }
 
   @Override
   public List<InventoryStatDto> getInventoryStats(int lowStockThreshold) {
+    Map<Integer, Long> defectiveByVariant = loadDefectiveCounts();
+    Map<Integer, String> shelfByVariant = loadShelfHints();
+
     return productVariantRepository.findAllActiveWithProduct().stream()
-        .map(v -> toInventoryStat(v, lowStockThreshold))
+        .map(
+            v ->
+                toInventoryStat(
+                    v, lowStockThreshold, defectiveByVariant, shelfByVariant))
         .collect(Collectors.toList());
   }
 
-  private InventoryStatDto toInventoryStat(ProductVariant v, int lowStockThreshold) {
+  @Override
+  @Transactional(readOnly = true)
+  public List<PendingReturnItemDto> listPendingReturnItems(int limit) {
+    return imeiService.listPendingReturnItems(limit);
+  }
+
+  private Map<Integer, Long> loadDefectiveCounts() {
+    Map<Integer, Long> map = new HashMap<>();
+    for (Object[] row :
+        productItemRepository.countByVariantGroupedByStatus(
+            ProductItem.ProductItemStatus.DEFECTIVE)) {
+      if (row[0] != null && row[1] != null) {
+        map.put((Integer) row[0], (Long) row[1]);
+      }
+    }
+    return map;
+  }
+
+  private Map<Integer, String> loadShelfHints() {
+    Map<Integer, String> map = new HashMap<>();
+    for (Object[] row : productItemRepository.findLatestShelfLocationByVariant()) {
+      if (row[0] != null && row[1] != null) {
+        map.put(((Number) row[0]).intValue(), String.valueOf(row[1]));
+      }
+    }
+    return map;
+  }
+
+  private InventoryStatDto toInventoryStat(
+      ProductVariant v,
+      int lowStockThreshold,
+      Map<Integer, Long> defectiveByVariant,
+      Map<Integer, String> shelfByVariant) {
     int qty = v.getStockQuantity() != null ? v.getStockQuantity() : 0;
     int threshold =
         v.getLowStockThreshold() != null ? v.getLowStockThreshold() : lowStockThreshold;
@@ -260,6 +365,8 @@ public class InventoryServiceImpl implements InventoryService {
         .skuCode(v.getSkuCode())
         .stockQuantity(qty)
         .lowStockThreshold(threshold)
+        .defectiveQuantity(defectiveByVariant.getOrDefault(v.getId(), 0L).intValue())
+        .shelfLocationHint(shelfByVariant.get(v.getId()))
         .unitPrice(unitPrice)
         .stockValue(Math.round(unitPrice * qty * 100.0) / 100.0)
         .status(status)

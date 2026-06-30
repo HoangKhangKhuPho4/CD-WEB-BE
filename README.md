@@ -126,7 +126,7 @@ Chèn screenshot hoặc GIF vào thư mục `docs/images/` và cập nhật đư
 |---------|------------------|
 | **ADMIN** | Toàn quyền: sản phẩm, đơn hàng, kho, CMS, cấu hình, nhân viên, thống kê doanh thu |
 | **SALES** | Xem SP, xử lý đơn (xác nhận / hủy / giao), phiếu bảo hành, báo cáo bán hàng |
-| **WAREHOUSE** | Sản phẩm & kho, nhập tồn, IMEI, đơn hàng (xuất), bảo hành |
+| **WAREHOUSE** | Sản phẩm & kho, nhập tồn, IMEI, đơn hàng (xuất), xử lý hàng hoàn |
 
 **Module admin:**
 
@@ -143,6 +143,8 @@ Chèn screenshot hoặc GIF vào thư mục `docs/images/` và cập nhật đư
 ---
 
 ## 5. Hướng dẫn cài đặt và chạy dự án (Getting Started)
+
+> **Tài liệu chi tiết (khuyến nghị):** [docs/HUONG_DAN_CAI_DAT.md](docs/HUONG_DAN_CAI_DAT.md) — hướng dẫn đầy đủ BE + FE, MySQL, Redis, Postman, xử lý lỗi.
 
 ### Yêu cầu hệ thống
 
@@ -219,15 +221,16 @@ Tóm tắt:
 
 **Tuyệt đối không** đẩy `.env`, `.env.local`, mật khẩu DB, `JWT_SECRET`, key VNPay/GHN lên GitHub.
 
-### Tài khoản demo (sau seed RBAC)
+### Tài khoản demo (sau seed RBAC / import DB nhóm)
 
 | Username | Vai trò | Ghi chú |
 |----------|---------|---------|
-| `admin` | ADMIN | Đổi mật khẩu sau lần đăng nhập đầu |
+| `admin` | ADMIN | Mật khẩu theo DB mẫu nhóm (Postman: `admin123`) |
 | `sales` | SALES | Nhân viên bán hàng |
 | `warehouse` | WAREHOUSE | Nhân viên kho |
+| `luutien` | CUSTOMER | Khách test (Postman: `123456`) |
 
-_(Mật khẩu theo cấu hình seed trong project — xem `DataSeeder` / tài liệu nhóm.)_
+Chi tiết đăng nhập và test API: [docs/HUONG_DAN_CAI_DAT.md](docs/HUONG_DAN_CAI_DAT.md).
 
 ---
 

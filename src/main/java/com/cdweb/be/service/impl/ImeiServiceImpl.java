@@ -545,6 +545,63 @@ public class ImeiServiceImpl implements ImeiService {
 
   @Override
   @Transactional
+  public void markOrderReturnedForInspection(Integer orderId) {
+    List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
+    for (OrderItem oi : orderItems) {
+      ProductItem pi = oi.getProductItem();
+      if (pi == null) {
+        continue;
+      }
+      if (pi.getStatus() == ProductItemStatus.SOLD
+          || pi.getStatus() == ProductItemStatus.RESERVED) {
+        pi.setStatus(ProductItemStatus.RETURNED);
+        productItemRepository.save(pi);
+      }
+    }
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<com.cdweb.be.dto.PendingReturnItemDto> listPendingReturnItems(int limit) {
+    int take = Math.max(1, Math.min(limit, 50));
+    return orderItemRepository.findReturnedItemsPendingInspection(
+            org.springframework.data.domain.PageRequest.of(0, take))
+        .stream()
+        .map(
+            oi -> {
+              ProductItem pi = oi.getProductItem();
+              String productName = null;
+              String sku = null;
+              if (pi.getVariant() != null) {
+                sku = pi.getVariant().getSkuCode();
+                if (pi.getVariant().getProduct() != null) {
+                  productName = pi.getVariant().getProduct().getName();
+                }
+              }
+              return com.cdweb.be.dto.PendingReturnItemDto.builder()
+                  .productItemId(pi.getId())
+                  .imei(pi.getImei())
+                  .serialNumber(pi.getSerialNumber())
+                  .productName(productName)
+                  .skuCode(sku)
+                  .orderCode(
+                      oi.getOrderDetail() != null && oi.getOrderDetail().getOrder() != null
+                          ? oi.getOrderDetail().getOrder().getOrderCode()
+                          : null)
+                  .updatedAt(
+                      pi.getUpdatedAt() != null
+                          ? pi.getUpdatedAt()
+                              .format(
+                                  java.time.format.DateTimeFormatter.ofPattern(
+                                      "dd/MM/yyyy HH:mm"))
+                          : null)
+                  .build();
+            })
+        .toList();
+  }
+
+  @Override
+  @Transactional
   public void restoreOrderInventory(Integer orderId) {
     List<OrderDetail> details = orderDetailRepository.findByOrderId(orderId);
     for (OrderDetail detail : details) {

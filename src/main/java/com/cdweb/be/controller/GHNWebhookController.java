@@ -5,7 +5,9 @@ import com.cdweb.be.dto.GHNDto;
 import com.cdweb.be.entity.Order;
 import com.cdweb.be.repository.OrderRepository;
 import com.cdweb.be.service.GhnService;
+import com.cdweb.be.service.ImeiService;
 import com.cdweb.be.service.OrderService;
+import com.cdweb.be.service.ReturnInspectionService;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -40,6 +42,10 @@ public class GHNWebhookController {
   @Autowired private OrderRepository orderRepository;
 
   @Autowired private OrderService orderService;
+
+  @Autowired private ImeiService imeiService;
+
+  @Autowired private ReturnInspectionService returnInspectionService;
 
   @Autowired private GhnService ghnService;
 
@@ -104,22 +110,24 @@ public class GHNWebhookController {
       // Xử lý theo trạng thái GHN
       switch (ghnStatus.toLowerCase()) {
         case "delivered":
-          // Chỉ chuyển nếu đang ở trạng thái SHIPPING
-          if (order.getStatus() == Order.OrderStatus.SHIPPING) {
+          if (order.getStatus() == Order.OrderStatus.SHIPPING
+              || order.getStatus() == Order.OrderStatus.DELIVERED) {
             order.setStatus(Order.OrderStatus.DELIVERED);
             order.setDeliveredAt(LocalDateTime.now());
 
-            // COD: tự động đánh dấu đã thanh toán
             if (order.getPaymentMethod() == Order.PaymentMethod.COD) {
               order.setPaymentStatus(Order.PaymentStatus.PAID);
             }
 
             orderRepository.save(order);
-
-            // Kích hoạt bảo hành
             orderService.activateWarrantyForOrder(order.getId());
 
-            log.info("GHN Webhook: Order {} auto-transitioned to DELIVERED", clientOrderCode);
+            order.setStatus(Order.OrderStatus.COMPLETED);
+            orderRepository.save(order);
+
+            log.info(
+                "GHN Webhook: Order {} auto-transitioned to COMPLETED (via delivered)",
+                clientOrderCode);
           }
           break;
 
@@ -132,8 +140,19 @@ public class GHNWebhookController {
           break;
 
         case "return", "returned":
-          log.warn("GHN Webhook: Order {} is being returned.", clientOrderCode);
-          // Có thể thêm logic chuyển trạng thái → REFUNDED
+          log.warn(
+              "GHN Webhook: Order {} returned — chờ kho kiểm định serial.",
+              clientOrderCode);
+          if (order.getStatus() == Order.OrderStatus.SHIPPING
+              || order.getStatus() == Order.OrderStatus.DELIVERED
+              || order.getStatus() == Order.OrderStatus.COMPLETED) {
+            imeiService.markOrderReturnedForInspection(order.getId());
+            returnInspectionService.createSheetsForOrder(order.getId(), "system-ghn");
+            order.setStatus(Order.OrderStatus.REFUNDED);
+            order.setPickedByUser(null);
+            order.setPickedAt(null);
+            orderRepository.save(order);
+          }
           break;
 
         default:

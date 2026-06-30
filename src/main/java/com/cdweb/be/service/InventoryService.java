@@ -6,6 +6,8 @@ import com.cdweb.be.dto.ImportStockRequest;
 import com.cdweb.be.dto.InventoryDto;
 import com.cdweb.be.dto.InventoryResponseDto;
 import com.cdweb.be.dto.InventoryStatDto;
+import com.cdweb.be.dto.InventorySummaryDto;
+import com.cdweb.be.dto.PendingReturnItemDto;
 import com.cdweb.be.dto.ProductItemListDto;
 import com.cdweb.be.dto.ReturnQuantityRequest;
 import com.cdweb.be.dto.ReturnStockRequest;
@@ -29,6 +31,10 @@ public interface InventoryService {
   InventoryDto.ValidateImportResponse validateImport(ImportStockRequest request);
 
   List<InventoryStatDto> getInventoryStats(int lowStockThreshold);
+
+  InventorySummaryDto getInventorySummary(int lowStockThreshold);
+
+  List<PendingReturnItemDto> listPendingReturnItems(int limit);
 
   void addImeiToProduct(ImeiRequest request);
 

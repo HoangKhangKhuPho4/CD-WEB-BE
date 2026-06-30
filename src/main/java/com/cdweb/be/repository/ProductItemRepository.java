@@ -21,6 +21,9 @@ public interface ProductItemRepository
 
   long countByVariantIdAndStatus(Integer variantId, ProductItem.ProductItemStatus status);
 
+  @Query("SELECT COUNT(pi) FROM ProductItem pi WHERE pi.variant.id = :variantId")
+  long countByVariantId(@Param("variantId") Integer variantId);
+
   long countByStatus(ProductItem.ProductItemStatus status);
 
   @Query("SELECT COUNT(DISTINCT oi.productItem.id) FROM OrderItem oi")
@@ -65,4 +68,71 @@ public interface ProductItemRepository
         LOWER(v.skuCode) LIKE LOWER(CONCAT('%', :keyword, '%')))
       """)
   Page<ProductItem> searchItems(@Param("keyword") String keyword, Pageable pageable);
+
+  List<ProductItem> findByVariantIdAndStatusOrderByCreatedAtAsc(
+      Integer variantId, ProductItem.ProductItemStatus status, Pageable pageable);
+
+  List<ProductItem> findByPurchaseOrder_IdAndVariant_IdOrderByCreatedAtAsc(
+      Integer purchaseOrderId, Integer variantId);
+
+  @Query(
+      """
+      SELECT pi FROM ProductItem pi
+      JOIN FETCH pi.variant v
+      JOIN FETCH v.product p
+      WHERE pi.status = 'AVAILABLE'
+        AND p.productType.id = :productTypeId
+      ORDER BY v.id, pi.createdAt ASC
+      """)
+  List<ProductItem> findAvailableByProductTypeId(@Param("productTypeId") Integer productTypeId);
+
+  @Query(
+      """
+      SELECT pi.variant.id, COUNT(pi) FROM ProductItem pi
+      JOIN pi.variant v
+      JOIN v.product p
+      WHERE pi.status = 'AVAILABLE'
+        AND p.productType.id = :productTypeId
+      GROUP BY pi.variant.id
+      """)
+  List<Object[]> countAvailableByVariantForProductType(
+      @Param("productTypeId") Integer productTypeId);
+
+  @Query(
+      "SELECT pi.variant.id, COUNT(pi) FROM ProductItem pi "
+          + "WHERE pi.status = :status GROUP BY pi.variant.id")
+  List<Object[]> countByVariantGroupedByStatus(
+      @Param("status") ProductItem.ProductItemStatus status);
+
+  @Query(
+      value =
+          """
+          SELECT pi.variant_id, pi.location FROM product_items pi
+          INNER JOIN (
+            SELECT variant_id, MAX(created_at) AS max_created
+            FROM product_items
+            WHERE status = 'AVAILABLE' AND location IS NOT NULL AND location <> ''
+            GROUP BY variant_id
+          ) latest ON pi.variant_id = latest.variant_id AND pi.created_at = latest.max_created
+          WHERE pi.status = 'AVAILABLE' AND pi.location IS NOT NULL AND pi.location <> ''
+          """,
+      nativeQuery = true)
+  List<Object[]> findLatestShelfLocationByVariant();
+
+  @Query(
+      "SELECT COUNT(DISTINCT pi.batchNumber) FROM ProductItem pi "
+          + "WHERE pi.purchaseOrder.id = :poId AND pi.batchNumber IS NOT NULL AND pi.batchNumber <> ''")
+  long countDistinctBatchNumbersByPurchaseOrderId(@Param("poId") Integer poId);
+
+  long countByPurchaseOrder_IdAndBatchNumber(Integer purchaseOrderId, String batchNumber);
+
+  @Query(
+      """
+      SELECT pi.batchNumber, COUNT(pi) FROM ProductItem pi
+      WHERE pi.purchaseOrder.id = :poId
+        AND pi.batchNumber IS NOT NULL AND pi.batchNumber <> ''
+      GROUP BY pi.batchNumber
+      ORDER BY MIN(pi.createdAt) ASC
+      """)
+  List<Object[]> countGroupedByBatchForPurchaseOrder(@Param("poId") Integer poId);
 }

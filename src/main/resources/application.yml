@@ -5,6 +5,7 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3306/cd_web
     username: root
+
     password: ""
     driver-class-name: com.mysql.cj.jdbc.Driver
 
@@ -64,9 +65,9 @@ google:
 # server.url: URL ảnh trong API JSON — dev local dùng localhost, không gắn ngrok.
 app:
   frontend-url: "http://localhost:3000"
-  backend-url: "https://c155-116-111-185-18.ngrok-free.app"
+  backend-url: "https://uncallused-nongenetically-ervin.ngrok-free.dev"
   server:
-    url: "http://localhost:8080"
+    url: "${app.backend-url}"
   ai:
     base-url: "http://localhost:5000"
   password-reset-expiry: 3600000

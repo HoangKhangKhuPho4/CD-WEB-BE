@@ -2,6 +2,8 @@ package com.cdweb.be.repository;
 
 import com.cdweb.be.entity.OrderItem;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -27,4 +29,17 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
       ORDER BY o.orderDate DESC
       """)
   List<OrderItem> findByProductItemIdWithOrder(@Param("productItemId") Integer productItemId);
+
+  @Query(
+      """
+      SELECT oi FROM OrderItem oi
+      JOIN FETCH oi.productItem pi
+      JOIN FETCH pi.variant v
+      LEFT JOIN FETCH v.product
+      JOIN FETCH oi.orderDetail od
+      JOIN FETCH od.order o
+      WHERE pi.status = 'RETURNED'
+      ORDER BY pi.updatedAt DESC
+      """)
+  Page<OrderItem> findReturnedItemsPendingInspection(Pageable pageable);
 }

@@ -107,11 +107,23 @@ public class Order {
   @Column(name = "delivered_at")
   private LocalDateTime deliveredAt;
 
+  /** Nhân viên kho đang soạn hàng (khóa đơn khi PROCESSING). */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "picked_by_user_id")
+  private User pickedByUser;
+
+  @Column(name = "picked_at")
+  private LocalDateTime pickedAt;
+
   @Column(name = "cancelled_at")
   private LocalDateTime cancelledAt;
 
   @Column(name = "cancel_reason", columnDefinition = "TEXT")
   private String cancelReason;
+
+  /** Kho xác nhận đã kiểm định hết serial hoàn — kế toán mới nên hoàn tiền. */
+  @Column(name = "warehouse_return_confirmed_at")
+  private LocalDateTime warehouseReturnConfirmedAt;
 
   // ── Payment Gateway fields ──────────────────────────────────────────────
   @Column(name = "transaction_ref", length = 100)

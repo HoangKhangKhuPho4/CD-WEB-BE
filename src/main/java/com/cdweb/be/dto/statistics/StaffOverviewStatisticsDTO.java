@@ -13,8 +13,13 @@ import lombok.NoArgsConstructor;
 public class StaffOverviewStatisticsDTO {
   private long pendingOrders;
   private long confirmedOrders;
+  private long processingOrders;
   private long shippingOrders;
   private long ordersToday;
   private long lowStockVariants;
   private long customerAccounts;
+  /** PO chờ nhập (PENDING + APPROVED + RECEIVING). */
+  private long pendingPurchaseOrders;
+  /** Đơn đã hoàn tiền — chờ kho ghi nhận hàng hoàn. */
+  private long pendingReturnOrders;
 }

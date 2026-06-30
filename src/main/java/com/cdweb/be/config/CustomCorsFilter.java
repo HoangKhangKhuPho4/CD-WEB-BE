@@ -46,18 +46,22 @@ public class CustomCorsFilter implements Filter {
     // 🎯 Define your allowed origins
     if (origin == null) return false;
 
-    // Allow any localhost with any port during development
+    // Allow any localhost with any port during development (http + https)
     if (origin.startsWith("http://localhost:")
+        || origin.startsWith("https://localhost:")
         || origin.startsWith("http://127.0.0.1:")
+        || origin.startsWith("https://127.0.0.1:")
         || origin.startsWith("http://192.168.")
         || origin.startsWith("http://10.")) {
       return true;
     }
 
     return origin.equals("http://localhost:3000")
+        || origin.equals("https://localhost:3000")
         || origin.equals("http://localhost:4200")
         || origin.equals("http://localhost:8081")
         || origin.endsWith(".ngrok-free.app")
+        || origin.endsWith(".ngrok-free.dev")
         || origin.startsWith("https://your-production-domain.com");
   }
 }

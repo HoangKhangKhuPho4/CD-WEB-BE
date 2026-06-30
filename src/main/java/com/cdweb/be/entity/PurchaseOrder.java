@@ -32,6 +32,9 @@ public class PurchaseOrder {
   @Column(name = "notes", columnDefinition = "TEXT")
   private String notes;
 
+  @Column(name = "reject_reason", columnDefinition = "TEXT")
+  private String rejectReason;
+
   @Column(name = "order_date")
   private LocalDateTime orderDate;
 

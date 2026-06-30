@@ -42,7 +42,7 @@ import jakarta.servlet.http.Cookie;
 @RestController
 
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(originPatterns = {"http://localhost:*", "https://localhost:*", "http://127.0.0.1:*", "https://127.0.0.1:*"})
 @Tag(name = "Xác thực (Authentication)", description = "Các API dành cho Đăng ký, Đăng nhập và Quản lý tài khoản")
 public class AuthController {
 

@@ -22,6 +22,9 @@ public class PurchaseOrderItem {
   @Column(name = "quantity_received")
   private Integer quantityReceived = 0;
 
+  @Column(name = "quantity_damaged")
+  private Integer quantityDamaged = 0;
+
   @Column(name = "unit_cost", nullable = false, precision = 15, scale = 2)
   private BigDecimal unitCost;
 

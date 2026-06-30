@@ -91,7 +91,9 @@ public class ProductItem {
     SOLD,
     DEFECTIVE,
     RETURNED,
-    IN_REPAIR
+    IN_REPAIR,
+    /** Kiểm kê: có trên hệ thống nhưng không quét thấy ngoài kệ */
+    MISSING
   }
 
   public enum ProductItemCondition {

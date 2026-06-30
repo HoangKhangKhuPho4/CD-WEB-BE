@@ -173,7 +173,14 @@ public class SecurityConfig {
     // keep explicit origins only.
     configuration.setAllowedOriginPatterns(
         Arrays.asList(
-            "http://localhost:*", "http://127.0.0.1:*", "http://10.*:*", "http://192.168.*:*"));
+            "http://localhost:*",
+            "https://localhost:*",
+            "http://127.0.0.1:*",
+            "https://127.0.0.1:*",
+            "http://10.*:*",
+            "http://192.168.*:*",
+            "https://*.ngrok-free.app",
+            "https://*.ngrok-free.dev"));
 
     // 📡 Allowed HTTP methods
     configuration.setAllowedMethods(

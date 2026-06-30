@@ -51,6 +51,12 @@ public interface ImeiService {
   /** Hoàn kho đơn hàng: cộng stock + giải phóng IMEI RESERVED. */
   void restoreOrderInventory(Integer orderId);
 
+  /** GHN hoàn hàng: đánh dấu serial RETURNED, chờ kho kiểm định. */
+  void markOrderReturnedForInspection(Integer orderId);
+
+  /** Danh sách serial RETURNED chờ kho quét kiểm định. */
+  java.util.List<com.cdweb.be.dto.PendingReturnItemDto> listPendingReturnItems(int limit);
+
   /** Kích hoạt bảo hành khi đơn DELIVERED. */
   void activateWarrantyForOrder(Integer orderId);
 }

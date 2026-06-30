@@ -21,6 +21,8 @@ public final class InventoryDto {
     private String variantName;
     private Integer currentStock;
     private Integer requestedQuantity;
+    private Double unitCost;
+    private Double lineTotal;
     private boolean valid;
     private String message;
   }
@@ -32,5 +34,8 @@ public final class InventoryDto {
   public static class ValidateImportResponse {
     private boolean allValid;
     private List<ValidateImportItemResult> results;
+    private String supplier;
+    private String note;
+    private Double estimatedTotalValue;
   }
 }

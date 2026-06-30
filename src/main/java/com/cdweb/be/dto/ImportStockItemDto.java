@@ -13,4 +13,8 @@ public class ImportStockItemDto {
   @NotNull(message = "Số lượng nhập không được để trống")
   @Min(value = 1, message = "Số lượng nhập phải lớn hơn 0")
   private Integer quantity;
+
+  /** Đơn giá nhập (tùy chọn) — dùng cho tổng giá trị phiếu */
+  @Min(value = 0, message = "Đơn giá nhập không được âm")
+  private Double unitCost;
 }

@@ -2,6 +2,7 @@ package com.cdweb.be.repository;
 
 import com.cdweb.be.entity.Order;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -15,6 +16,10 @@ import org.springframework.stereotype.Repository;
 public interface OrderRepository extends JpaRepository<Order, Integer> {
 
   Optional<Order> findByOrderCode(String orderCode);
+
+  Optional<Order> findByTrackingCode(String trackingCode);
+
+  Optional<Order> findByGhnOrderCode(String ghnOrderCode);
 
   @Query("SELECT o FROM Order o WHERE o.isHidden = false")
   Page<Order> findAllActive(Pageable pageable);
@@ -258,6 +263,17 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
           "SELECT o FROM Order o WHERE o.isHidden = false "
                   + "AND (:status IS NULL OR o.status = :status)")
   Page<Order> findByStatusFilter(@Param("status") Order.OrderStatus status, Pageable pageable);
+
+  @Query(
+      "SELECT o FROM Order o WHERE o.isHidden = false AND o.status IN :statuses "
+          + "AND (:keyword IS NULL OR :keyword = '' OR "
+          + "LOWER(o.orderCode) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
+          + "LOWER(o.shippingName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
+          + "LOWER(o.shippingPhone) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+  Page<Order> findFulfillmentQueue(
+      @Param("statuses") Collection<Order.OrderStatus> statuses,
+      @Param("keyword") String keyword,
+      Pageable pageable);
 
   // 3. Khách hàng lấy danh sách đơn của họ (có lọc status)
   // Lưu ý: Đổi Long userId thành kiểu dữ liệu ID tương ứng của User trong project của bạn (Long hoặc Integer)

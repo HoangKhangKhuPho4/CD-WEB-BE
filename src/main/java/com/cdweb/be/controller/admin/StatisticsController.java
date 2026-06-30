@@ -57,7 +57,7 @@ public class StatisticsController {
   @GetMapping("/staff-overview")
   @PreAuthorize(
       "hasAnyAuthority('ORDER_MANAGE', 'ORDER_VIEW_ALL', 'STOCK_IMPORT', 'REPORT_SALES', "
-          + "'INVENTORY_STAT', 'ROLE_ADMIN')")
+          + "'INVENTORY_STAT', 'STOCK_RETURN', 'ROLE_ADMIN')")
   public ResponseEntity<StaffOverviewStatisticsDTO> getStaffOverviewStatistics(
       @RequestParam(required = false) String fromDate,
       @RequestParam(required = false) String toDate) {

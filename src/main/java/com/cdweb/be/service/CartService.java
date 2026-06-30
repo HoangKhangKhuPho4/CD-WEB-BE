@@ -29,6 +29,7 @@ public class CartService {
   private final ProductVariantRepository productVariantRepository;
   private final UserRepository userRepository;
   private final ImageRepository imageRepository;
+  private final InventoryAuditService inventoryAuditService;
 
   @Value("${app.server.url:http://localhost:8080}")
   private String serverUrl;
@@ -149,6 +150,10 @@ public class CartService {
   }
 
   private void validateStock(ProductVariant variant, int requestedQty) {
+    if (variant.getProduct() != null && variant.getProduct().getProductType() != null) {
+      inventoryAuditService.assertNoAuditLockForProductType(
+          variant.getProduct().getProductType().getId());
+    }
     if (variant.getStockQuantity() != null && requestedQty > variant.getStockQuantity()) {
       throw new BadRequestException(
               "Không đủ hàng trong kho. Còn lại: "

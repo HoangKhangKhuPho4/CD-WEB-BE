@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -55,6 +56,7 @@ public class OrderManagementService {
     @Autowired private GhnService ghnService;
     @Autowired private ImeiService imeiService;
     @Autowired private OrderItemRepository orderItemRepository;
+    @Autowired @Lazy private com.cdweb.be.service.WarehouseFulfillmentService warehouseFulfillmentService;
 
     // ── Admin: danh sách đơn (có filter) ──
     @Transactional(readOnly = true)
@@ -112,6 +114,10 @@ public class OrderManagementService {
 
         validateTransition(order.getStatus(), toStatus);
         assertStatusChangeAllowed(toStatus);
+
+        if (toStatus == Order.OrderStatus.SHIPPING) {
+            warehouseFulfillmentService.assertReadyForDispatch(orderId);
+        }
 
         User admin = userRepository.findByUsernameOrEmail(adminUsername, adminUsername).orElse(null);
 
@@ -242,6 +248,12 @@ public class OrderManagementService {
             case CANCELLED -> {
                 if (!hasAnyAuthority("ORDER_CANCEL")) {
                     throw new BadRequestException("Bạn không có quyền hủy đơn hàng (ORDER_CANCEL)");
+                }
+            }
+            case PROCESSING -> {
+                if (!hasAnyAuthority("ORDER_ASSIGN_SHIPPING")) {
+                    throw new BadRequestException(
+                            "Bạn không có quyền bắt đầu xử lý đơn (ORDER_ASSIGN_SHIPPING)");
                 }
             }
             case SHIPPING -> {
@@ -429,8 +441,14 @@ public class OrderManagementService {
                         assigned.stream()
                                 .map(OrderItem::getProductItem)
                                 .filter(pi -> pi != null)
-                                .map(ProductItem::getImei)
-                                .filter(imei -> imei != null && !imei.isBlank())
+                                .map(
+                                        pi -> {
+                                            if (pi.getImei() != null && !pi.getImei().isBlank()) {
+                                                return pi.getImei();
+                                            }
+                                            return pi.getSerialNumber();
+                                        })
+                                .filter(code -> code != null && !code.isBlank())
                                 .collect(Collectors.toList()));
 
                 return ir;

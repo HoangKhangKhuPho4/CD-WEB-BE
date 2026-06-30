@@ -66,6 +66,8 @@ public class OrderService {
 
   @Autowired private ImeiService imeiService;
 
+  @Autowired private InventoryAuditService inventoryAuditService;
+
   @Value("${app.server.url:http://localhost:8080}")
   private String serverUrl;
 
@@ -98,6 +100,10 @@ public class OrderService {
     // 2. Kiểm tra tồn kho
     for (CartItem item : items) {
       ProductVariant variant = item.getVariant();
+      if (variant.getProduct() != null && variant.getProduct().getProductType() != null) {
+        inventoryAuditService.assertNoAuditLockForProductType(
+            variant.getProduct().getProductType().getId());
+      }
       if (variant.getStockQuantity() == null || variant.getStockQuantity() < item.getQuantity()) {
         int available = variant.getStockQuantity() != null ? variant.getStockQuantity() : 0;
         throw new BadRequestException(

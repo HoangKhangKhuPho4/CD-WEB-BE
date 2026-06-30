@@ -32,14 +32,14 @@ public class RbacDataInitializer implements ApplicationRunner {
   @Override
   @Transactional
   public void run(ApplicationArguments args) {
-    ensureExtendedPermissions();
     Map<String, Permission> permissions;
-    if (roleRepository.count() == 0 || permissionRepository.count() == 0) {
+    if (roleRepository.count() == 0) {
       log.info("Initializing RBAC roles and permissions...");
       permissions = seedPermissions();
       seedRoles(permissions);
       log.info("RBAC seed completed.");
     } else {
+      ensureExtendedPermissions();
       permissions = loadPermissionMap();
     }
     alignSalesRole(permissions);
@@ -73,7 +73,7 @@ public class RbacDataInitializer implements ApplicationRunner {
             });
   }
 
-  /** WAREHOUSE — 11 quyền (thiết kế DB cd_web, không ORDER_CONFIRM / ORDER_MANAGE / PRODUCT_MANAGE / STOCK_RETURN). */
+  /** WAREHOUSE — 11 quyền (không ORDER_CONFIRM / ORDER_MANAGE / PRODUCT_MANAGE / WARRANTY_MANAGE). */
   private void alignWarehouseRole(Map<String, Permission> p) {
     roleRepository
         .findByName("WAREHOUSE")
@@ -92,7 +92,7 @@ public class RbacDataInitializer implements ApplicationRunner {
                       "ORDER_CANCEL",
                       "ORDER_ASSIGN_SHIPPING",
                       "ORDER_TRACKING_UPDATE",
-                      "WARRANTY_MANAGE");
+                      "STOCK_RETURN");
               syncRolePermissions(role, expected, "WAREHOUSE (11 permissions)");
             });
   }
@@ -146,18 +146,25 @@ public class RbacDataInitializer implements ApplicationRunner {
       {"REVIEW_REPLY", "Phản hồi đánh giá", "Trả lời khách hàng trên đánh giá"},
       {"ORDER_MANAGE", "Quản lý đơn hàng", "Quản trị đơn hàng admin"},
       {"CUSTOMER_VIEW", "Xem khách hàng", "Xem danh sách khách hàng"},
-      {"STOCK_RETURN", "Trả hàng kho", "Xử lý trả hàng nhập kho"},
+      {"STOCK_RETURN", "Xử lý hàng hoàn", "Ghi nhận hàng trả lại vào kho"},
       {"SYSTEM_CONFIG_MANAGE", "Cấu hình hệ thống", "Cấu hình website & AI"},
       {"ORDER_CREATE", "Tạo đơn hàng", "Đặt hàng / checkout"},
     };
 
     Map<String, Permission> map = new LinkedHashMap<>();
     for (String[] def : defs) {
-      Permission p = new Permission();
-      p.setCode(def[0]);
-      p.setName(def[1]);
-      p.setDescription(def[2]);
-      map.put(def[0], permissionRepository.save(p));
+      Permission p =
+          permissionRepository
+              .findByCode(def[0])
+              .orElseGet(
+                  () -> {
+                    Permission created = new Permission();
+                    created.setCode(def[0]);
+                    created.setName(def[1]);
+                    created.setDescription(def[2]);
+                    return permissionRepository.save(created);
+                  });
+      map.put(def[0], p);
     }
     return map;
   }
@@ -180,7 +187,7 @@ public class RbacDataInitializer implements ApplicationRunner {
             "ORDER_CANCEL",
             "ORDER_ASSIGN_SHIPPING",
             "ORDER_TRACKING_UPDATE",
-            "WARRANTY_MANAGE"));
+            "STOCK_RETURN"));
 
     createRole(
         "SALES",
@@ -237,7 +244,7 @@ public class RbacDataInitializer implements ApplicationRunner {
     String[][] extra = {
       {"ORDER_MANAGE", "Quản lý đơn hàng", "Quản trị đơn hàng admin"},
       {"CUSTOMER_VIEW", "Xem khách hàng", "Xem danh sách khách hàng"},
-      {"STOCK_RETURN", "Trả hàng kho", "Xử lý trả hàng nhập kho"},
+      {"STOCK_RETURN", "Xử lý hàng hoàn", "Ghi nhận hàng trả lại vào kho"},
       {"SYSTEM_CONFIG_MANAGE", "Cấu hình hệ thống", "Cấu hình website & AI"},
       {"ORDER_CREATE", "Tạo đơn hàng", "Đặt hàng / checkout"},
     };

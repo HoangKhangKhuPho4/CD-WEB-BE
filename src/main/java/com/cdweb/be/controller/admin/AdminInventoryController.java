@@ -7,6 +7,7 @@ import com.cdweb.be.dto.ImportStockRequest;
 import com.cdweb.be.dto.InventoryDto;
 import com.cdweb.be.dto.InventoryResponseDto;
 import com.cdweb.be.dto.InventoryStatDto;
+import com.cdweb.be.dto.PendingReturnItemDto;
 import com.cdweb.be.dto.ReturnQuantityRequest;
 import com.cdweb.be.dto.ReturnStockRequest;
 import com.cdweb.be.entity.Inventory.TransactionType;
@@ -80,9 +81,19 @@ public class AdminInventoryController {
         ApiResponse.success("Đã ghi nhận trả hàng theo số lượng", null));
   }
 
+  // ─── GET /api/admin/inventory/summary — Thẻ cảnh báo tổng quan ───────────
+  @GetMapping("/summary")
+  @PreAuthorize("hasAnyAuthority('STOCK_IMPORT', 'INVENTORY_STAT', 'ROLE_ADMIN')")
+  public ResponseEntity<ApiResponse<com.cdweb.be.dto.InventorySummaryDto>> getInventorySummary(
+      @RequestParam(defaultValue = "10") int lowStockThreshold) {
+    return ResponseEntity.ok(
+        ApiResponse.success(
+            "Tổng quan kho", inventoryService.getInventorySummary(lowStockThreshold)));
+  }
+
   // ─── GET /api/admin/inventory/stats — Quản lý Báo cáo tồn kho ───────────
   @GetMapping("/stats")
-  @PreAuthorize("hasAnyAuthority('INVENTORY_STAT', 'ROLE_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('INVENTORY_STAT', 'STOCK_IMPORT', 'ROLE_ADMIN')")
   public ResponseEntity<ApiResponse<List<InventoryStatDto>>> getInventoryStats(
       @RequestParam(defaultValue = "10") int lowStockThreshold) {
     List<InventoryStatDto> stats = inventoryService.getInventoryStats(lowStockThreshold);
@@ -99,6 +110,16 @@ public class AdminInventoryController {
         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=inventory-stats.csv")
         .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
         .body(csv);
+  }
+
+  /** Serial RETURNED từ GHN — chờ kho quét kiểm định. */
+  @GetMapping("/pending-returns")
+  @PreAuthorize("hasAnyAuthority('STOCK_RETURN', 'STOCK_IMPORT', 'ROLE_ADMIN')")
+  public ResponseEntity<ApiResponse<List<PendingReturnItemDto>>> pendingReturns(
+      @RequestParam(defaultValue = "20") int limit) {
+    return ResponseEntity.ok(
+        ApiResponse.success(
+            "Hàng hoàn chờ kiểm định", inventoryService.listPendingReturnItems(limit)));
   }
 
   // ─── POST /api/admin/inventory/imei — Gán mã số IMEI cho kiện hàng ──────

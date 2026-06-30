@@ -3,6 +3,7 @@ package com.cdweb.be.service.impl;
 import com.cdweb.be.dto.statistics.*;
 import com.cdweb.be.entity.Order;
 import com.cdweb.be.entity.ProductVariant;
+import com.cdweb.be.entity.PurchaseOrder;
 import com.cdweb.be.exception.BadRequestException;
 import com.cdweb.be.repository.OrderDetailRepository;
 import com.cdweb.be.repository.OrderRepository;
@@ -43,6 +44,8 @@ public class StatisticsServiceImpl implements StatisticsService {
   @Autowired private ProductVariantRepository productVariantRepository;
 
   @Autowired private com.cdweb.be.repository.UserRepository userRepository;
+
+  @Autowired private com.cdweb.be.repository.PurchaseOrderRepository purchaseOrderRepository;
 
   @Autowired
   private com.cdweb.be.repository.UserInteractionRepository
@@ -732,6 +735,7 @@ public class StatisticsServiceImpl implements StatisticsService {
 
     long pending;
     long confirmed;
+    long processing;
     long shipping;
     long ordersInPeriod;
 
@@ -745,6 +749,10 @@ public class StatisticsServiceImpl implements StatisticsService {
           nullSafeCount(
               orderRepository.countByStatusAndDateRange(
                   Order.OrderStatus.CONFIRMED, range.start(), range.end()));
+      processing =
+          nullSafeCount(
+              orderRepository.countByStatusAndDateRange(
+                  Order.OrderStatus.PROCESSING, range.start(), range.end()));
       shipping =
           nullSafeCount(
               orderRepository.countByStatusAndDateRange(
@@ -761,16 +769,30 @@ public class StatisticsServiceImpl implements StatisticsService {
       ordersInPeriod = ordersToday != null ? ordersToday : 0L;
       pending = nullSafeCount(orderRepository.countByStatus(Order.OrderStatus.PENDING));
       confirmed = nullSafeCount(orderRepository.countByStatus(Order.OrderStatus.CONFIRMED));
+      processing = nullSafeCount(orderRepository.countByStatus(Order.OrderStatus.PROCESSING));
       shipping = nullSafeCount(orderRepository.countByStatus(Order.OrderStatus.SHIPPING));
     }
+
+    long pendingPo =
+        purchaseOrderRepository.countByStatusIn(
+            java.util.EnumSet.of(
+                PurchaseOrder.PurchaseOrderStatus.PENDING,
+                PurchaseOrder.PurchaseOrderStatus.APPROVED,
+                PurchaseOrder.PurchaseOrderStatus.RECEIVING));
+
+    long pendingReturn =
+        nullSafeCount(orderRepository.countByStatus(Order.OrderStatus.REFUNDED));
 
     return StaffOverviewStatisticsDTO.builder()
         .pendingOrders(pending)
         .confirmedOrders(confirmed)
+        .processingOrders(processing)
         .shippingOrders(shipping)
         .ordersToday(ordersInPeriod)
         .lowStockVariants(productVariantRepository.countLowStockVariants())
         .customerAccounts(userRepository.countCustomerAccounts())
+        .pendingPurchaseOrders(pendingPo)
+        .pendingReturnOrders(pendingReturn)
         .build();
   }
 
